@@ -18,6 +18,12 @@
 .env.test.local
 .env.production.local
 
+# Server credentials and sensitive files
+server/serviceAccountKey.json
+serviceAccountKey.json
+*.pem
+*.key
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

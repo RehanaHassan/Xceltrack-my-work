@@ -19,6 +19,7 @@ const HeroSection: React.FC = () => {
                     opacity={0.15}
                     vignetteStrength={2.8}
                     glowIntensity={0.15}
+                    isStatic={true}
                 />
             </div>
 
@@ -34,7 +35,7 @@ const HeroSection: React.FC = () => {
                         <BlurText text="meets" delay={150} animateBy="words" direction="top" className="text-[#051747]" />
                     </div>
                     <div className="mt-2 md:mt-4">
-                        <BlurText text="Version Control" delay={150} animateBy="words" direction="top" className="!text-[#000080]" />
+                        <BlurText text="Version Control" delay={150} animateBy="words" direction="top" className="text-sapphire-600" />
                     </div>
                 </div>
 
@@ -65,12 +66,12 @@ const HeroSection: React.FC = () => {
                     {/* Card 1: Blue */}
                     <div className="relative group">
                         {/* Colorful Glow */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/100 to-blue-500/5 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 -z-20" />
+                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-blue-500/5 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 -z-20" />
 
                         {/* Tilted Dark Background */}
-                        <div className="absolute inset-0 bg-[#0D2440] rounded-2xl transform rotate-3 translate-y-2 translate-x-2 -z-10 transition-transform duration-300 group-hover:rotate-6"></div>
+                        <div className="absolute inset-0 bg-gray-400 rounded-2xl transform rotate-3 translate-y-2 translate-x-2 -z-10 transition-transform duration-300"></div>
 
-                        <div className="hover-card border-2 border-sapphire-900/30 p-8 rounded-2xl h-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] hover:-translate-y-6 bg-white">
+                        <div className="hover-card border-2 border-sapphire-900/30 p-8 rounded-2xl h-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] bg-white">
                             <div className="w-14 h-14 bg-sapphire-50 rounded-xl mb-6 mx-auto flex items-center justify-center border border-sapphire-50 group-hover:scale-110 transition-transform">
                                 <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -87,9 +88,9 @@ const HeroSection: React.FC = () => {
                         <div className="absolute inset-0 bg-gradient-to-br from-purple-500/100 to-purple-500/5 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 -z-20" />
 
                         {/* Tilted Dark Background */}
-                        <div className="absolute inset-0 bg-[#0D2440] rounded-2xl transform rotate-3 translate-y-2 translate-x-2 -z-10 transition-transform duration-300 group-hover:rotate-6"></div>
+                        <div className="absolute inset-0 bg-gray-400 rounded-2xl transform rotate-3 translate-y-2 translate-x-2 -z-10 transition-transform duration-300"></div>
 
-                        <div className="hover-card border-2 border-sapphire-900/30 p-8 rounded-2xl h-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] hover:-translate-y-6 bg-white">
+                        <div className="hover-card border-2 border-sapphire-900/30 p-8 rounded-2xl h-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] bg-white">
                             <div className="w-14 h-14 bg-purple-50 rounded-xl mb-6 mx-auto flex items-center justify-center border border-purple-100 group-hover:scale-110 transition-transform">
                                 <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -106,9 +107,9 @@ const HeroSection: React.FC = () => {
                         <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/100 to-indigo-500/5 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 -z-20" />
 
                         {/* Tilted Dark Background */}
-                        <div className="absolute inset-0 bg-[#0D2440] rounded-2xl transform rotate-3 translate-y-2 translate-x-2 -z-10 transition-transform duration-300 group-hover:rotate-6"></div>
+                        <div className="absolute inset-0 bg-gray-400 rounded-2xl transform rotate-3 translate-y-2 translate-x-2 -z-10 transition-transform duration-300"></div>
 
-                        <div className="hover-card border-2 border-sapphire-900/30 p-8 rounded-2xl h-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] hover:-translate-y-6 bg-white">
+                        <div className="hover-card border-2 border-sapphire-900/30 p-8 rounded-2xl h-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] bg-white">
                             <div className="w-14 h-14 bg-indigo-50 rounded-xl mb-6 mx-auto flex items-center justify-center border border-indigo-100 group-hover:scale-110 transition-transform">
                                 <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />

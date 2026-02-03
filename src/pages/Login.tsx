@@ -9,11 +9,53 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState({
+    email: '',
+    password: ''
+  });
+  const [touched, setTouched] = useState({
+    email: false,
+    password: false
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-
   const [message, setMessage] = useState('');
+
+  const validateField = (name: string, value: string) => {
+    let errorMsg = '';
+    if (name === 'email') {
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!value) {
+        errorMsg = 'Email is required';
+      } else if (!emailRegex.test(value)) {
+        errorMsg = 'Please enter a valid email address';
+      }
+    } else if (name === 'password') {
+      if (!value) {
+        errorMsg = 'Password is required';
+      }
+    }
+    setErrors(prev => ({ ...prev, [name]: errorMsg }));
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setTouched(prev => ({ ...prev, [name]: true }));
+    validateField(name, value);
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { name } = e.target;
+    if (name === 'password' && !touched.email) {
+      setTouched(prev => ({ ...prev, email: true }));
+      validateField('email', email);
+    }
+  };
+
+  const isFormValid = () => {
+    return email.trim() !== '' && password.trim() !== '' && Object.values(errors).every(err => err === '');
+  };
 
   const { login, loginWithGoogle, loginWithGithub, resetPassword } = useAuth();
   const navigate = useNavigate();
@@ -102,50 +144,78 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
       <div className="text-sm text-blue-200 mb-6 text-center">or use your email account</div>
 
       {/* Email Input */}
-      <div className="flex items-center w-full mb-4">
-        <div className="bg-white/10 backdrop-blur-sm p-3 rounded-l-lg border border-white/20 border-r-0">
-          <i className="fa fa-envelope text-blue-300 w-4"></i>
-        </div>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="flex-1 p-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-r-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
-          required
-          disabled={isLoading}
-        />
-      </div>
-
-      {/* Password Input */}
-      <div className="flex items-center w-full mb-6">
-        <div className="bg-white/10 backdrop-blur-sm p-3 rounded-l-lg border border-white/20 border-r-0">
-          <i className="fa fa-lock text-blue-300 w-4"></i>
-        </div>
-        <div className="flex-1 relative">
+      <div className="w-full mb-4">
+        <div className="flex items-center">
+          <div className="bg-white/10 backdrop-blur-sm p-3 rounded-l-lg border border-white/20 border-r-0">
+            <i className="fa fa-envelope text-blue-300 w-4"></i>
+          </div>
           <input
-            type={showPassword ? "text" : "password"}
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-r-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all pr-10"
+            type="email"
+            name="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setTouched(prev => ({ ...prev, email: true }));
+              validateField('email', e.target.value);
+            }}
+            onBlur={handleBlur}
+            onFocus={handleFocus}
+            className={`flex-1 p-3 bg-white/10 backdrop-blur-sm border ${touched.email && errors.email ? 'border-red-400' : 'border-white/20'} rounded-r-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all`}
             required
             disabled={isLoading}
           />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-blue-300 hover:text-white transition-colors focus:outline-none"
-          >
-            <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-          </button>
         </div>
+        {touched.email && errors.email && (
+          <div className="text-red-400 text-xs mt-1 ml-11">{errors.email}</div>
+        )}
+      </div>
+
+      {/* Password Input */}
+      <div className="w-full mb-6">
+        <div className="flex items-center">
+          <div className="bg-white/10 backdrop-blur-sm p-3 rounded-l-lg border border-white/20 border-r-0">
+            <i className="fa fa-lock text-blue-300 w-4"></i>
+          </div>
+          <div className="flex-1 relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              name="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setTouched(prev => ({ ...prev, password: true }));
+                validateField('password', e.target.value);
+              }}
+              onBlur={handleBlur}
+              onFocus={handleFocus}
+              className={`w-full p-3 bg-white/10 backdrop-blur-sm border ${touched.password && errors.password ? 'border-red-400' : 'border-white/20'} rounded-r-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all pr-10`}
+              required
+              disabled={isLoading}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-blue-300 hover:text-white transition-colors focus:outline-none"
+            >
+              <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+            </button>
+          </div>
+        </div>
+        {touched.password && errors.password && (
+          <div className="text-red-400 text-xs mt-1 ml-11">{errors.password}</div>
+        )}
       </div>
 
       <button
         type="submit"
-        disabled={isLoading}
-        className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-3 px-6 rounded-xl font-bold uppercase tracking-wider hover:from-blue-700 hover:to-cyan-700 transition-all duration-200 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+        disabled={isLoading || !isFormValid()}
+        className={`w-full py-3 px-6 rounded-xl font-bold uppercase tracking-wider transition-all duration-200 transform shadow-lg
+          ${isLoading || !isFormValid()
+            ? 'bg-gray-500/50 text-gray-300 cursor-not-allowed border border-gray-400/30'
+            : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 hover:scale-105 active:scale-95'
+          }`}
       >
         {isLoading ? 'Signing In...' : 'Sign In'}
       </button>

@@ -147,8 +147,8 @@ input:-webkit-autofill:active {
     /* Hidden initially */
     height: 0;
     /* Hidden initially */
-    background-color: lightblue;
-    /* Matches user's code snippet */
+    background-color: rgba(173, 216, 230, 0.4);
+    /* Subtle light blue */
     transition: all 0.5s;
     z-index: 0;
     /* Behind content */
@@ -206,8 +206,8 @@ input:-webkit-autofill:active {
     content: "";
     width: 0;
     height: 0;
-    background-color: white;
-    /* White on hover */
+    background-color: rgba(255, 255, 255, 0.5);
+    /* Subtle white */
     transition: all 0.5s;
     z-index: 0;
 }

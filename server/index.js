@@ -1,12 +1,27 @@
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
+const helmet = require('helmet');
 const admin = require('./firebaseAdmin');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 const multer = require('multer');
 const ExcelJS = require('exceljs');
 const fs = require('fs');
+const crypto = require('crypto');
+
+// Import optimization modules
+const { logger, requestLogger } = require('./logger');
+const { cache, closeRedis } = require('./cache');
+const {
+    generalLimiter,
+    authLimiter,
+    otpLimiter,
+    uploadLimiter,
+    adminLimiter,
+    commitLimiter,
+} = require('./rateLimiter');
+const FileProcessor = require('./fileProcessor');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -25,16 +40,42 @@ const io = new Server(server, {
 });
 
 // Middleware
+app.use(helmet()); // Security headers
 app.use(cors());
 app.use(express.json());
+app.use(requestLogger); // HTTP request logging
 
-// Postgres Configuration
+// Add request ID for tracking
+app.use((req, res, next) => {
+    req.id = crypto.randomUUID();
+    next();
+});
+
+// Postgres Configuration with Optimized Connection Pooling
 const pool = new Pool({
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
     database: process.env.DB_NAME,
     password: process.env.DB_PASSWORD,
     port: process.env.DB_PORT,
+    max: 20, // Maximum number of clients in the pool
+    min: 5, // Minimum number of clients in the pool
+    idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+    connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+});
+
+// Pool event listeners for monitoring
+pool.on('connect', () => {
+    console.log('New client connected to the pool');
+});
+
+pool.on('error', (err) => {
+    console.error('Unexpected error on idle client', err);
+    process.exit(-1);
+});
+
+pool.on('remove', () => {
+    console.log('Client removed from pool');
 });
 
 // Email Configuration
@@ -155,6 +196,23 @@ const createTables = async () => {
         `);
         console.log('Cell Versions table ready');
 
+        // Create indexes for optimized query performance
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_workbooks_owner_id ON workbooks(owner_id);
+            CREATE INDEX IF NOT EXISTS idx_workbooks_updated_at ON workbooks(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_worksheets_workbook_id ON worksheets(workbook_id);
+            CREATE INDEX IF NOT EXISTS idx_cells_worksheet_id ON cells(worksheet_id);
+            CREATE INDEX IF NOT EXISTS idx_cells_row_col ON cells(worksheet_id, row_idx, col_idx);
+            CREATE INDEX IF NOT EXISTS idx_commits_workbook_id ON commits(workbook_id);
+            CREATE INDEX IF NOT EXISTS idx_commits_timestamp ON commits(timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_commits_workbook_timestamp ON commits(workbook_id, timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_cell_versions_commit_id ON cell_versions(commit_id);
+            CREATE INDEX IF NOT EXISTS idx_cell_versions_cell_id ON cell_versions(cell_id);
+            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+            CREATE INDEX IF NOT EXISTS idx_otp_email ON otp_verifications(email);
+        `);
+        console.log('Database indexes created successfully');
+
     } catch (err) {
         console.error('Error creating tables:', err);
     }
@@ -165,7 +223,7 @@ createTables();
 // --- OTP Endpoints ---
 
 // Send OTP
-app.post('/api/send-otp', async (req, res) => {
+app.post('/api/send-otp', otpLimiter, async (req, res) => {
     const { email, name } = req.body;
 
     if (!email || !name) {
@@ -251,7 +309,7 @@ app.post('/api/send-otp', async (req, res) => {
 });
 
 // Verify OTP
-app.post('/api/verify-otp', async (req, res) => {
+app.post('/api/verify-otp', otpLimiter, async (req, res) => {
     const { email, otp } = req.body;
 
     if (!email || !otp) {
@@ -305,7 +363,7 @@ app.post('/api/verify-otp', async (req, res) => {
 });
 
 // Sync Endpoint
-app.post('/api/sync-user', async (req, res) => {
+app.post('/api/sync-user', authLimiter, async (req, res) => {
     const { uid, email, name } = req.body;
 
     if (!uid || !email || !name) {
@@ -313,11 +371,22 @@ app.post('/api/sync-user', async (req, res) => {
     }
 
     try {
+        // Check cache first
+        const cacheKey = cache.userKey(uid);
+        const cachedUser = await cache.get(cacheKey);
+
+        if (cachedUser) {
+            logger.info('User data retrieved from cache', { uid, email });
+            return res.status(200).json({ message: 'User already synced', user: cachedUser });
+        }
+
         // Check if user exists
         const checkRes = await pool.query('SELECT * FROM users WHERE firebase_uid = $1', [uid]);
 
         if (checkRes.rows.length > 0) {
-            // User exists, return existing user data
+            // Cache the user data
+            await cache.set(cacheKey, checkRes.rows[0], 300); // 5 minutes TTL
+            logger.info('User already synced', { uid, email });
             return res.status(200).json({ message: 'User already synced', user: checkRes.rows[0] });
         }
 
@@ -330,11 +399,14 @@ app.post('/api/sync-user', async (req, res) => {
         const values = [uid, email, name, 'user'];
         const result = await pool.query(insertQuery, values);
 
-        console.log(`User synced: ${email} as ${result.rows[0].role}`);
+        // Cache the new user
+        await cache.set(cacheKey, result.rows[0], 300);
+
+        logger.info('User synced successfully', { uid, email, role: result.rows[0].role });
         res.status(201).json({ user: result.rows[0] });
 
     } catch (error) {
-        console.error('Error syncing user:', error);
+        logger.error('Error syncing user', { error: error.message, uid, email });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -344,15 +416,28 @@ app.get('/api/user-role/:uid', async (req, res) => {
     const { uid } = req.params;
 
     try {
+        // Check cache first
+        const cacheKey = cache.userKey(uid);
+        const cachedUser = await cache.get(cacheKey);
+
+        if (cachedUser && cachedUser.role) {
+            logger.info('User role retrieved from cache', { uid });
+            return res.json({ role: cachedUser.role });
+        }
+
         const result = await pool.query('SELECT role FROM users WHERE firebase_uid = $1', [uid]);
 
         if (result.rows.length === 0) {
+            logger.warn('User not found', { uid });
             return res.status(404).json({ error: 'User not found' });
         }
 
+        // Cache the user data
+        await cache.set(cacheKey, result.rows[0], 300);
+
         res.json({ role: result.rows[0].role });
     } catch (error) {
-        console.error('Error fetching user role:', error);
+        logger.error('Error fetching user role', { error: error.message, uid });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -363,7 +448,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 // --- Workbook & Excel Processing Endpoints ---
 
 // Upload Workbook
-app.post('/api/workbooks/upload', upload.single('file'), async (req, res) => {
+app.post('/api/workbooks/upload', uploadLimiter, upload.single('file'), async (req, res) => {
     const { owner_id, owner_name } = req.body;
     const file = req.file;
 
@@ -371,112 +456,112 @@ app.post('/api/workbooks/upload', upload.single('file'), async (req, res) => {
         return res.status(400).json({ error: 'File and owner_id are required' });
     }
 
+    // Validate file
+    const fileProcessor = new FileProcessor();
+    const validation = fileProcessor.validateFile(file);
+
+    if (!validation.valid) {
+        logger.warn('File validation failed', { errors: validation.errors, owner_id });
+        return res.status(400).json({ error: validation.errors.join(', ') });
+    }
+
+    const client = await pool.connect();
     try {
-        const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(file.buffer);
+        await client.query('BEGIN');
 
         // 1. Create Workbook in DB
-        const wbResult = await pool.query(
+        const wbResult = await client.query(
             'INSERT INTO workbooks (name, owner_id) VALUES ($1, $2) RETURNING *',
             [file.originalname, owner_id]
         );
         const newWorkbook = wbResult.rows[0];
 
+        // 2. Process Excel file
+        logger.info('Processing Excel file', { workbookId: newWorkbook.id, fileName: file.originalname });
+
+        const parsedData = await fileProcessor.processExcelFile(file.buffer, file.originalname);
+
         // 3. Create Initial Commit
-        const crypto = require('crypto');
         const hash = crypto.createHash('sha256')
             .update(`${newWorkbook.id}-${owner_id}-${Date.now()}-initial`)
             .digest('hex');
 
-        const commitResult = await pool.query(
+        const commitResult = await client.query(
             'INSERT INTO commits (workbook_id, user_id, message, hash) VALUES ($1, $2, $3, $4) RETURNING *',
             [newWorkbook.id, owner_id, 'Initial Import', hash]
         );
         const initialCommit = commitResult.rows[0];
 
         // 4. Process Worksheets & Cells
-        for (const sheet of sheets) {
+        for (const sheet of parsedData.sheets) {
             // Insert Worksheet
-            const wsResult = await pool.query(
+            const wsResult = await client.query(
                 'INSERT INTO worksheets (workbook_id, name, sheet_order) VALUES ($1, $2, $3) RETURNING *',
                 [newWorkbook.id, sheet.name, sheet.order]
             );
             const newWorksheet = wsResult.rows[0];
 
-            // Process Cells
-            const cellValues = [];
-            sheet.data.eachRow((row, rowNumber) => {
-                row.eachCell((cell, colNumber) => {
-                    let cellValue = cell.value;
-                    let formula = null;
-
-                    if (cell.type === ExcelJS.ValueType.Formula) {
-                        cellValue = cell.result;
-                        formula = cell.formula;
-                    } else if (typeof cellValue === 'object') {
-                        cellValue = JSON.stringify(cellValue);
-                    }
-
-                    const style = {
-                        font: cell.font,
-                        alignment: cell.alignment,
-                        fill: cell.fill,
-                        border: cell.border
-                    };
-
-                    const r = rowNumber - 1;
-                    const c = colNumber - 1;
-
-                    cellValues.push([
-                        newWorksheet.id,
-                        r,
-                        c,
-                        cell.address,
-                        cellValue,
-                        formula,
-                        JSON.stringify(style)
-                    ]);
-                });
-            });
-
-            // Insert Cells and Versions
-            for (const cellData of cellValues) {
-                const cellResult = await pool.query(
-                    'INSERT INTO cells (worksheet_id, row_idx, col_idx, address, value, formula, style) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-                    cellData
-                );
-                const cellId = cellResult.rows[0].id;
-
-                await pool.query(
-                    'INSERT INTO cell_versions (commit_id, cell_id, value, formula, style) VALUES ($1, $2, $3, $4, $5)',
-                    [initialCommit.id, cellId, cellData[4], cellData[5], cellData[6]]
-                );
+            // Insert cells in batches
+            if (sheet.cells && sheet.cells.length > 0) {
+                await fileProcessor.insertCellsBatch(client, sheet.cells, newWorksheet.id, initialCommit.id);
             }
         }
+
+        await client.query('COMMIT');
+
+        // Invalidate user's workbooks cache
+        await cache.del(cache.userWorkbooksKey(owner_id));
+
+        logger.info('Workbook uploaded successfully', {
+            workbookId: newWorkbook.id,
+            fileName: file.originalname,
+            totalCells: parsedData.totalCells,
+            owner_id
+        });
 
         res.status(201).json({
             message: 'Workbook uploaded and initialized successfully',
             workbook: newWorkbook,
+            stats: {
+                totalSheets: parsedData.totalSheets,
+                totalCells: parsedData.totalCells,
+            },
         });
 
     } catch (error) {
-        console.error('Error processing upload:', error);
+        await client.query('ROLLBACK');
+        logger.error('Error processing upload', { error: error.message, owner_id, fileName: file.originalname });
         res.status(500).json({ error: error.message });
+    } finally {
+        client.release();
     }
 });
 
 // Get User's Workbooks
-app.get('/api/workbooks', async (req, res) => {
+app.get('/api/workbooks', generalLimiter, async (req, res) => {
     const { owner_id } = req.query;
     if (!owner_id) {
         return res.status(400).json({ error: 'owner_id is required' });
     }
 
     try {
+        // Check cache first
+        const cacheKey = cache.userWorkbooksKey(owner_id);
+        const cachedWorkbooks = await cache.get(cacheKey);
+
+        if (cachedWorkbooks) {
+            logger.info('Workbooks retrieved from cache', { owner_id });
+            return res.json(cachedWorkbooks);
+        }
+
         const result = await pool.query('SELECT * FROM workbooks WHERE owner_id = $1 ORDER BY updated_at DESC', [owner_id]);
+
+        // Cache the result
+        await cache.set(cacheKey, result.rows, 120); // 2 minutes TTL
+
         res.json(result.rows);
     } catch (error) {
-        console.error('Error fetching workbooks:', error);
+        logger.error('Error fetching workbooks', { error: error.message, owner_id });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -555,7 +640,7 @@ app.get('/api/users', async (req, res) => {
 });
 
 // Create User (Admin)
-app.post('/api/admin/users', async (req, res) => {
+app.post('/api/admin/users', adminLimiter, async (req, res) => {
     const { email, password, name, role } = req.body;
 
     try {
@@ -573,15 +658,16 @@ app.post('/api/admin/users', async (req, res) => {
             values
         );
 
+        logger.info('Admin created user successfully', { uid: userRecord.uid, email, role: role || 'user' });
         res.status(201).json({ message: 'User created successfully', user: result.rows[0] });
     } catch (error) {
-        console.error('Error creating user:', error);
+        logger.error('Error creating user', { error: error.message, email });
         res.status(500).json({ error: error.message });
     }
 });
 
 // Update User (Admin)
-app.put('/api/admin/users/:uid', async (req, res) => {
+app.put('/api/admin/users/:uid', adminLimiter, async (req, res) => {
     const { uid } = req.params;
     const { email, name, role } = req.body;
 
@@ -610,16 +696,17 @@ app.put('/api/admin/users/:uid', async (req, res) => {
             return res.status(404).json({ error: 'User not found in database' });
         }
 
+        logger.info('Admin updated user successfully', { uid, email });
         res.json({ message: 'User updated successfully', user: result.rows[0] });
 
     } catch (error) {
-        console.error('Error updating user:', error);
+        logger.error('Error updating user', { error: error.message, uid });
         res.status(500).json({ error: error.message });
     }
 });
 
 // Delete User (Admin)
-app.delete('/api/admin/users/:uid', async (req, res) => {
+app.delete('/api/admin/users/:uid', adminLimiter, async (req, res) => {
     const { uid } = req.params;
 
     try {
@@ -638,10 +725,11 @@ app.delete('/api/admin/users/:uid', async (req, res) => {
             console.warn('User deleted from Auth but not found in Postgres');
         }
 
+        logger.info('Admin deleted user successfully', { uid });
         res.json({ message: 'User deleted successfully' });
 
     } catch (error) {
-        console.error('Error deleting user:', error);
+        logger.error('Error deleting user', { error: error.message, uid });
         res.status(500).json({ error: error.message });
     }
 });
@@ -651,7 +739,7 @@ app.delete('/api/admin/users/:uid', async (req, res) => {
 // ============================================
 
 // Create a new commit (snapshot of current workbook state)
-app.post('/api/commits', async (req, res) => {
+app.post('/api/commits', commitLimiter, async (req, res) => {
     const { workbook_id, user_id, message } = req.body;
 
     if (!workbook_id || !user_id) {
@@ -694,11 +782,16 @@ app.post('/api/commits', async (req, res) => {
         }
 
         await client.query('COMMIT');
+
+        // Invalidate cache
+        await cache.delPattern(`commits:${workbook_id}*`);
+
+        logger.info('Commit created successfully', { commitId: commit.id, workbook_id, user_id });
         res.status(201).json({ commit, cells_snapshotted: cellsResult.rows.length });
 
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Error creating commit:', error);
+        logger.error('Error creating commit', { error: error.message, workbook_id, user_id });
         res.status(500).json({ error: error.message });
     } finally {
         client.release();
@@ -706,7 +799,7 @@ app.post('/api/commits', async (req, res) => {
 });
 
 // Get commit history for a workbook
-app.get('/api/workbooks/:id/commits', async (req, res) => {
+app.get('/api/workbooks/:id/commits', generalLimiter, async (req, res) => {
     const { id } = req.params;
     const { limit = 50, offset = 0 } = req.query;
 
@@ -735,6 +828,44 @@ app.get('/api/workbooks/:id/commits', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+// Get all commits for a user (Global Activity)
+app.get('/api/commits', generalLimiter, async (req, res) => {
+    const { user_id, limit = 50, offset = 0 } = req.query;
+
+    if (!user_id) {
+        return res.status(400).json({ error: 'user_id is required' });
+    }
+
+    try {
+        const result = await pool.query(
+            `SELECT 
+                c.id,
+                c.message,
+                c.user_id,
+                c.timestamp,
+                c.hash,
+                c.workbook_id,
+                w.name as workbook_name,
+                COUNT(cv.id) as changes_count
+             FROM commits c
+             JOIN workbooks w ON c.workbook_id = w.id
+             LEFT JOIN cell_versions cv ON c.id = cv.commit_id
+             WHERE c.user_id = $1
+             GROUP BY c.id, w.name
+             ORDER BY c.timestamp DESC
+             LIMIT $2 OFFSET $3`,
+            [user_id, limit, offset]
+        );
+
+        res.json({ commits: result.rows });
+
+    } catch (error) {
+        console.error('Error fetching user commits:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 
 // Get detailed commit information with cell changes
 app.get('/api/commits/:id', async (req, res) => {
@@ -964,6 +1095,39 @@ io.on('connection', (socket) => {
 // ============================================
 
 server.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-    console.log(`WebSocket server ready`);
+    logger.info(`Server running on port ${port}`);
+    logger.info('WebSocket server ready');
+    logger.info('All optimization modules loaded successfully');
 });
+
+// Graceful shutdown
+const gracefulShutdown = async () => {
+    logger.info('Received shutdown signal, closing server gracefully...');
+
+    server.close(() => {
+        logger.info('HTTP server closed');
+    });
+
+    // Close Socket.io
+    io.close(() => {
+        logger.info('Socket.io server closed');
+    });
+
+    try {
+        // Close Redis connection
+        await closeRedis();
+
+        // Close database pool
+        await pool.end();
+        logger.info('Database pool closed');
+
+        logger.info('Graceful shutdown completed');
+        process.exit(0);
+    } catch (err) {
+        logger.error('Error during shutdown', { error: err.message });
+        process.exit(1);
+    }
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);

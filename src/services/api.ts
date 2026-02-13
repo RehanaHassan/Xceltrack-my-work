@@ -93,6 +93,18 @@ export const getCommitHistory = async (workbook_id: number, limit: number = 50, 
     return response.json();
 };
 
+// Get all commits for a user (Global Activity)
+export const getUserCommits = async (userId: string, limit: number = 50, offset: number = 0): Promise<{ commits: (Commit & { workbook_name: string })[] }> => {
+    const response = await fetch(`${API_URL}/commits?user_id=${userId}&limit=${limit}&offset=${offset}`);
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch user commits');
+    }
+
+    return response.json();
+};
+
 // Get detailed commit information
 export const getCommitDetails = async (commit_id: number): Promise<CommitDetails> => {
     const response = await fetch(`${API_URL}/commits/${commit_id}`);

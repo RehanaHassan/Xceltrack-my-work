@@ -13,6 +13,8 @@ import Layout from './components/Layout';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminRoute from './components/AdminRoute';
 import Editor from './pages/Editor';
+import History from './pages/History';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -76,6 +78,13 @@ function AppRoutes() {
           </Layout>
         </ProtectedRoute>
       } />
+      <Route path="/history" element={
+        <ProtectedRoute>
+          <Layout>
+            <History />
+          </Layout>
+        </ProtectedRoute>
+      } />
       <Route path="/editor" element={
         <ProtectedRoute>
           <Layout>
@@ -114,7 +123,9 @@ function App() {
         <WebSocketProvider>
           <Router>
             <div className="App">
-              <AppRoutes />
+              <ErrorBoundary>
+                <AppRoutes />
+              </ErrorBoundary>
             </div>
           </Router>
         </WebSocketProvider>

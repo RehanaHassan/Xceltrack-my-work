@@ -3,21 +3,39 @@
 @tailwind utilities;
 
 :root {
-    --bg-primary: #f9fafb;
+    --bg-primary: #f8fafc;
     --bg-secondary: #ffffff;
+    --bg-sidebar: #051747;
+    --bg-navbar: rgba(255, 255, 255, 0.7);
+    --bg-card: #ffffff;
     --text-primary: #051747;
     --text-secondary: #535f80;
-    --border-color: #e5e7eb;
-    --accent-color: #3b82f6;
+    --text-on-dark: #ffffff;
+    --border-color: #e2e8f0;
+    --accent-primary: #3b82f6;
+    --accent-secondary: #8b5cf6;
+    --shadow-color: rgba(0, 0, 0, 0.1);
 }
 
 [data-theme='dark'] {
     --bg-primary: #0f172a;
     --bg-secondary: #1e293b;
+    --bg-sidebar: #020617;
+    --bg-navbar: rgba(15, 23, 42, 0.7);
+    --bg-card: #1e293b;
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
+    --text-on-dark: #f8fafc;
     --border-color: #334155;
-    --accent-color: #60a5fa;
+    --accent-primary: #60a5fa;
+    --accent-secondary: #a78bfa;
+    --shadow-color: rgba(0, 0, 0, 0.4);
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.3s, color 0.3s;
 }
 
 /* Override browser autofill style to match transparent inputs */

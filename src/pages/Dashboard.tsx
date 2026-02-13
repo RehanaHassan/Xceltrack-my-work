@@ -1,32 +1,39 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { getWorkbooks, uploadWorkbook } from '../services/api';
 import FileUploadModal from '../components/FileUploadModal';
+import SkeletonLoader from '../components/SkeletonLoader';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [files, setFiles] = useState<any[]>([]);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchFiles = React.useCallback(async () => {
+    if (user) {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getWorkbooks(user.uid);
+        setFiles(data);
+      } catch (error) {
+        console.error("Failed to fetch workbooks", error);
+        setError("Failed to load workbooks. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    }
+  }, [user]);
 
   useEffect(() => {
-    const fetchFiles = async () => {
-      if (user) {
-        setLoading(true);
-        try {
-          const data = await getWorkbooks(user.uid);
-          setFiles(data);
-        } catch (error) {
-          console.error("Failed to fetch workbooks", error);
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
     fetchFiles();
-  }, [user]);
+  }, [fetchFiles]);
 
   const quickStats = {
     totalFiles: files.length,
@@ -44,7 +51,7 @@ const Dashboard: React.FC = () => {
       }
     } catch (error) {
       console.error("Upload failed", error);
-      alert("Failed to upload workbook");
+      showToast("Failed to upload workbook", "error");
     }
     setIsUploadModalOpen(false);
   };
@@ -52,7 +59,7 @@ const Dashboard: React.FC = () => {
 
 
   // Styles updated for Light Sapphire Theme with Tilted Background Effect
-  const cardStyle = "bg-white backdrop-blur-lg border border-white/60 rounded-2xl shadow-xl overflow-visible transition-all duration-300 hover:shadow-[0_20px_50px_rgba(59,130,246,0.3)]";
+  const cardStyle = "bg-[var(--bg-card)] backdrop-blur-lg border border-[var(--border-color)] rounded-2xl shadow-xl overflow-visible transition-all duration-300 hover:shadow-[0_20px_50px_var(--shadow-color)]";
 
   return (
     <div className="relative min-h-[calc(100vh-6rem)] rounded-3xl overflow-hidden">
@@ -67,8 +74,8 @@ const Dashboard: React.FC = () => {
           <div className={`${cardStyle} p-8 mb-8`}>
             <div className="flex justify-between items-start">
               <div>
-                <h1 className="text-4xl font-bold mb-2 text-[#051747]">Welcome back, {user?.name || 'User'}! 👋</h1>
-                <p className="text-[#535F80] text-lg">
+                <h1 className="text-4xl font-bold mb-2 text-[var(--text-primary)]">Welcome back, {user?.name || 'User'}! 👋</h1>
+                <p className="text-[var(--text-secondary)] text-lg">
                   Ready to continue working on your spreadsheets? Here's what's happening today.
                 </p>
               </div>
@@ -89,8 +96,8 @@ const Dashboard: React.FC = () => {
                 <div className={`${cardStyle} p-6 hover:shadow-[0_25px_60px_rgba(59,130,246,0.5)]`}>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[#535F80] text-sm font-medium">Total Files</p>
-                      <p className="text-3xl font-bold text-[#051747]">{quickStats.totalFiles}</p>
+                      <p className="text-[var(--text-secondary)] text-sm font-medium">Total Files</p>
+                      <p className="text-3xl font-bold text-[var(--text-primary)]">{quickStats.totalFiles}</p>
                     </div>
                     <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center border border-blue-200">
                       <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -179,17 +186,32 @@ const Dashboard: React.FC = () => {
                   {loading ? (
                     // Skeleton Loaders
                     [1, 2, 3].map((n) => (
-                      <div key={n} className="flex items-center justify-between p-4 border-2 border-gray-100 rounded-xl animate-pulse">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
-                          <div className="space-y-2">
-                            <div className="h-4 bg-gray-200 rounded w-32"></div>
-                            <div className="h-3 bg-gray-100 rounded w-20"></div>
+                      <div key={n} className="flex items-center justify-between p-4 border-2 border-gray-100 rounded-xl bg-white">
+                        <div className="flex items-center space-x-4 flex-1">
+                          <SkeletonLoader width="40px" height="40px" borderRadius="8px" />
+                          <div className="space-y-2 flex-1">
+                            <SkeletonLoader width="60%" height="16px" />
+                            <SkeletonLoader width="30%" height="12px" />
                           </div>
                         </div>
-                        <div className="h-4 bg-gray-100 rounded w-12"></div>
+                        <SkeletonLoader width="50px" height="16px" className="ml-4" />
                       </div>
                     ))
+                  ) : error ? (
+                    <div className="text-center py-8 bg-red-50 rounded-xl border border-red-100">
+                      <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <p className="text-red-800 font-medium mb-4">{error}</p>
+                      <button
+                        onClick={fetchFiles}
+                        className="px-4 py-2 bg-white text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors font-medium text-sm shadow-sm"
+                      >
+                        Try Again
+                      </button>
+                    </div>
                   ) : files.length > 0 ? (
                     files.map((file) => (
                       <Link key={file.id} to={`/editor/${file.id}`} className="hover-card flex items-center justify-between p-4 border-2 border-gray-100 rounded-xl transition-all group cursor-pointer block hover:border-blue-200 hover:bg-blue-50/30">
@@ -229,7 +251,10 @@ const Dashboard: React.FC = () => {
                         Quickly get started by creating a new spreadsheet or uploading an existing file.
                       </p>
                       <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                        <button className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-all text-sm">
+                        <button
+                          onClick={() => navigate('/editor')}
+                          className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-all text-sm"
+                        >
                           New Spreadsheet
                         </button>
                         <button
@@ -256,7 +281,10 @@ const Dashboard: React.FC = () => {
               <div className={`${cardStyle} p-6`}>
                 <h3 className="text-lg font-semibold text-[#051747] mb-4">Quick Actions</h3>
                 <div className="space-y-3">
-                  <button className="btn-watch-demo w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg">
+                  <button
+                    onClick={() => navigate('/editor')}
+                    className="btn-watch-demo w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg"
+                  >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>

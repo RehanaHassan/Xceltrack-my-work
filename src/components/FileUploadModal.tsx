@@ -98,6 +98,7 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
                     <button
                         onClick={onClose}
                         className="text-gray-500 hover:text-gray-700 transition-colors"
+                        aria-label="Close Modal"
                     >
                         {(FiX as any)({ size: 24 })}
                     </button>
@@ -158,6 +159,7 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
                                 <button
                                     onClick={() => setSelectedFile(null)}
                                     className="text-red-500 hover:text-red-700 transition-colors"
+                                    aria-label="Remove File"
                                 >
                                     {(FiX as any)({ size: 20 })}
                                 </button>

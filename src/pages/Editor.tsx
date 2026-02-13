@@ -10,6 +10,7 @@ import CollaborativeCursors from '../components/CollaborativeCursors';
 import WhosEditingSidebar from '../components/WhosEditingSidebar';
 import VersionHistoryTimeline from '../components/VersionHistoryTimeline';
 import RollbackModal from '../components/RollbackModal';
+import SkeletonLoader from '../components/SkeletonLoader';
 import { FiChevronLeft, FiChevronRight, FiMenu, FiSidebar } from 'react-icons/fi';
 import { Commit } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,6 +27,7 @@ const Editor: React.FC = () => {
   const { joinWorkbook, leaveWorkbook, sendCursorMove, sendCellEdit, activeUsers, cursors, onCellChange } = useWebSocket();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [workbookData, setWorkbookData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedCell, setSelectedCell] = useState('A1');
   const [cellFormula, setCellFormula] = useState('');
   const [zoom, setZoom] = useState(100);
@@ -39,33 +41,40 @@ const Editor: React.FC = () => {
   const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchWorkbook = React.useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      console.log('Fetching workbook:', id);
+      const data = await getWorkbookData(id);
+      console.log('Workbook loaded:', data);
+      setWorkbookData(data);
+      // Update worksheets state from loaded data if needed
+      if (data.sheets) {
+        const loadedSheets = Object.values(data.sheets).map((sheet: any) => ({
+          id: sheet.id,
+          name: sheet.name,
+          position: 0 // logic to determine position
+        }));
+        setWorksheets(loadedSheets);
+        if (loadedSheets.length > 0) setActiveWorksheetId(loadedSheets[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching workbook:', error);
+      setError('Failed to load workbook. Please try again.');
+      showToast('Failed to load workbook', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id, showToast]);
+
   // Fetch workbook data when ID changes
   useEffect(() => {
-    const fetchWorkbook = async () => {
-      if (!id) return;
-      try {
-        console.log('Fetching workbook:', id);
-        const data = await getWorkbookData(id);
-        console.log('Workbook loaded:', data);
-        setWorkbookData(data);
-        // Update worksheets state from loaded data if needed
-        if (data.sheets) {
-          const loadedSheets = Object.values(data.sheets).map((sheet: any) => ({
-            id: sheet.id,
-            name: sheet.name,
-            position: 0 // logic to determine position
-          }));
-          setWorksheets(loadedSheets);
-          if (loadedSheets.length > 0) setActiveWorksheetId(loadedSheets[0].id);
-        }
-      } catch (error) {
-        console.error('Error fetching workbook:', error);
-        showToast('Failed to load workbook', 'error');
-      }
-    };
-
     fetchWorkbook();
-  }, [id]);
+  }, [fetchWorkbook]);
 
   // Join workbook room for collaboration
   useEffect(() => {
@@ -244,6 +253,105 @@ const Editor: React.FC = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        {/* Skeleton Toolbar */}
+        <div className="bg-white border-b border-gray-200 p-2 flex items-center space-x-2">
+          <SkeletonLoader width="100px" height="36px" />
+          <SkeletonLoader width="100px" height="36px" />
+          <div className="flex-1" />
+          <SkeletonLoader width="150px" height="36px" />
+        </div>
+
+        {/* Skeleton Formula Bar */}
+        <div className="bg-white border-b border-gray-200 p-2 flex items-center space-x-2">
+          <SkeletonLoader width="80px" height="32px" />
+          <SkeletonLoader width="100%" height="32px" />
+        </div>
+
+        <div className="flex-1 flex overflow-hidden relative">
+          <div className="flex-1 p-6">
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden h-full flex flex-col">
+              <div className="p-4 border-b border-gray-200 flex justify-end">
+                <SkeletonLoader width="120px" height="30px" />
+              </div>
+              <div className="flex-1 p-4">
+                <SkeletonLoader width="100%" height="100%" />
+              </div>
+              <div className="p-2 border-t border-gray-200 flex space-x-2">
+                <SkeletonLoader width="80px" height="30px" />
+                <SkeletonLoader width="80px" height="30px" />
+                <SkeletonLoader width="80px" height="30px" />
+              </div>
+            </div>
+          </div>
+
+          {/* Skeleton Sidebar */}
+          <div className="w-80 bg-white border-l border-gray-200 p-4">
+            <SkeletonLoader width="100%" height="40px" className="mb-4" />
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                <SkeletonLoader shape="circle" width="32px" height="32px" />
+                <div className="flex-1">
+                  <SkeletonLoader width="60%" height="16px" className="mb-1" />
+                  <SkeletonLoader width="40%" height="12px" />
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <SkeletonLoader shape="circle" width="32px" height="32px" />
+                <div className="flex-1">
+                  <SkeletonLoader width="60%" height="16px" className="mb-1" />
+                  <SkeletonLoader width="40%" height="12px" />
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <SkeletonLoader shape="circle" width="32px" height="32px" />
+                <div className="flex-1">
+                  <SkeletonLoader width="60%" height="16px" className="mb-1" />
+                  <SkeletonLoader width="40%" height="12px" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center border border-gray-200">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Failed to Load Workbook</h2>
+          <p className="text-gray-600 mb-8">{error}</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={() => fetchWorkbook()}
+              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Try Again
+            </button>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Editor Toolbar */}
@@ -265,8 +373,8 @@ const Editor: React.FC = () => {
       <div className="flex-1 flex overflow-hidden relative">
         {/* Main Editor Area */}
         <div className="flex-1 overflow-auto p-6 transition-all duration-300">
-          <div className="max-w-full mx-auto">
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          <div className="max-w-full mx-auto h-full flex flex-col">
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden flex-1 flex flex-col">
               {/* Zoom Controls */}
               <div className="flex justify-end p-4 border-b border-gray-200">
                 <ZoomControls
@@ -276,7 +384,7 @@ const Editor: React.FC = () => {
               </div>
 
               {/* Excel Editor */}
-              <div className="p-4">
+              <div className="p-4 flex-1">
                 <ExcelEditor
                   ref={editorRef}
                   workbookData={workbookData}
@@ -285,7 +393,7 @@ const Editor: React.FC = () => {
                   onSave={(data: any) => {
                     console.log('Workbook saved:', data);
                     if (id && user) {
-                      createCommit(parseInt(id), user.uid, 'Manual save', data)
+                      createCommit(parseInt(id), user.uid, 'Manual save')
                         .then(() => showToast('Changes saved and committed', 'success'))
                         .catch(() => showToast('Failed to save commit', 'error'));
                     }

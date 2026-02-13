@@ -127,10 +127,10 @@ const WorksheetTabs: React.FC<WorksheetTabsProps> = ({
     };
 
     return (
-        <div className="bg-gray-100 border-t border-gray-300 px-4 py-2">
+        <div className="bg-gray-100 border-t border-gray-300 px-2 sm:px-4 py-2 transition-all duration-300">
             <div className="flex items-center space-x-2">
                 {/* Worksheet Tabs */}
-                <div className="flex items-center space-x-1 flex-1 overflow-x-auto">
+                <div className="flex items-center space-x-1 flex-1 overflow-x-auto no-scrollbar mask-gradient-right pb-1">
                     {worksheets.map((worksheet) => (
                         <div
                             key={worksheet.id}
@@ -140,19 +140,19 @@ const WorksheetTabs: React.FC<WorksheetTabsProps> = ({
                             onDragLeave={handleDragLeave}
                             onDrop={(e) => handleDrop(e, worksheet.id)}
                             onDragEnd={handleDragEnd}
-                            className={`relative group ${activeWorksheetId === worksheet.id
-                                    ? 'bg-white border-t-2 border-blue-500'
-                                    : 'bg-gray-200 hover:bg-gray-300'
+                            className={`relative group flex-shrink-0 ${activeWorksheetId === worksheet.id
+                                ? 'bg-white border-t-2 border-blue-500 shadow-sm'
+                                : 'bg-gray-200 hover:bg-gray-300'
                                 } ${dragOverId === worksheet.id && draggedId !== worksheet.id
                                     ? 'border-l-2 border-blue-400'
                                     : ''
                                 } ${draggedId === worksheet.id ? 'opacity-50' : ''
-                                } rounded-t-lg transition-colors cursor-pointer`}
+                                } rounded-t-lg transition-all cursor-pointer`}
                         >
                             <div
                                 onClick={() => handleTabClick(worksheet.id)}
                                 onDoubleClick={() => handleDoubleClick(worksheet)}
-                                className="flex items-center px-4 py-2 min-w-[120px]"
+                                className="flex items-center px-3 sm:px-4 py-2 min-w-[100px] sm:min-w-[120px] max-w-[150px] sm:max-w-[200px]"
                             >
                                 {editingId === worksheet.id ? (
                                     <input
@@ -166,7 +166,7 @@ const WorksheetTabs: React.FC<WorksheetTabsProps> = ({
                                     />
                                 ) : (
                                     <>
-                                        <span className="text-sm font-medium text-gray-700 flex-1">
+                                        <span className="text-sm font-medium text-gray-700 flex-1 truncate" title={worksheet.name}>
                                             {worksheet.name}
                                         </span>
                                         <button
@@ -174,7 +174,8 @@ const WorksheetTabs: React.FC<WorksheetTabsProps> = ({
                                                 e.stopPropagation();
                                                 setContextMenuId(contextMenuId === worksheet.id ? null : worksheet.id);
                                             }}
-                                            className="ml-2 p-1 opacity-0 group-hover:opacity-100 hover:bg-gray-300 rounded transition-opacity"
+                                            className={`ml-2 p-1 rounded transition-opacity ${activeWorksheetId === worksheet.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} hover:bg-gray-300`}
+                                            aria-label="Tab Options"
                                         >
                                             {(FiMoreVertical as any)({ size: 14 })}
                                         </button>
@@ -184,20 +185,24 @@ const WorksheetTabs: React.FC<WorksheetTabsProps> = ({
 
                             {/* Context Menu */}
                             {contextMenuId === worksheet.id && (
-                                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[150px]">
+                                <div className="absolute bottom-full left-0 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[140px]">
                                     <button
-                                        onClick={() => {
+                                        onClick={(e) => {
+                                            e.stopPropagation();
                                             handleDoubleClick(worksheet);
                                             setContextMenuId(null);
                                         }}
-                                        className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                                        className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors first:rounded-t-lg"
                                     >
                                         {(FiEdit2 as any)({ size: 14 })}
                                         <span>Rename</span>
                                     </button>
                                     <button
-                                        onClick={() => handleDelete(worksheet.id)}
-                                        className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDelete(worksheet.id);
+                                        }}
+                                        className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors last:rounded-b-lg"
                                     >
                                         {(FiTrash2 as any)({ size: 14 })}
                                         <span>Delete</span>
@@ -211,11 +216,12 @@ const WorksheetTabs: React.FC<WorksheetTabsProps> = ({
                 {/* Add Worksheet Button */}
                 <button
                     onClick={onWorksheetCreate}
-                    className="flex items-center space-x-1 px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                    className="flex items-center justify-center space-x-1 px-2 sm:px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors flex-shrink-0"
                     title="Add Worksheet"
+                    aria-label="Add Worksheet"
                 >
                     {(FiPlus as any)({ size: 16 })}
-                    <span className="text-sm font-medium text-gray-700">Add Sheet</span>
+                    <span className="hidden sm:inline text-sm font-medium text-gray-700">Add Sheet</span>
                 </button>
             </div>
         </div>

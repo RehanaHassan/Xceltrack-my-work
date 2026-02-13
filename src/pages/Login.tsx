@@ -57,7 +57,8 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
     return email.trim() !== '' && password.trim() !== '' && Object.values(errors).every(err => err === '');
   };
 
-  const { login, loginWithGoogle, loginWithGithub, resetPassword } = useAuth();
+  const { login, loginWithGoogle, loginWithGithub, resetPassword, signup } = useAuth();
+
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,6 +79,30 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
       }
     } catch (err) {
       setError('Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTestLogin = async () => {
+    setError('');
+    setMessage('');
+    setIsLoading(true);
+    const testEmail = 'test@xceltrack.com';
+    const testPassword = 'password123';
+
+    try {
+      // Try to login first
+      await login(testEmail, testPassword);
+      navigate('/dashboard');
+    } catch (err) {
+      // If login fails, try to signup
+      try {
+        await signup('Test User', testEmail, testPassword);
+        navigate('/dashboard');
+      } catch (signupErr) {
+        setError('Failed to create test account. Please try manually.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -105,6 +130,7 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
         {/* ... existing social buttons ... */}
         <button
           type="button"
+          aria-label="Sign in with Google"
           onClick={async () => {
             try {
               const user = await loginWithGoogle();
@@ -119,10 +145,11 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
           }}
           className="w-10 h-10 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/20 transition-all duration-200 border border-white/20"
         >
-          <i className="fab fa-google text-blue-300"></i>
+          <i className="fab fa-google text-blue-300" aria-hidden="true"></i>
         </button>
         <button
           type="button"
+          aria-label="Sign in with GitHub"
           onClick={async () => {
             try {
               const user = await loginWithGithub();
@@ -137,7 +164,7 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
           }}
           className="w-10 h-10 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/20 transition-all duration-200 border border-white/20"
         >
-          <i className="fab fa-github text-blue-300"></i>
+          <i className="fab fa-github text-blue-300" aria-hidden="true"></i>
         </button>
       </div>
 
@@ -147,12 +174,13 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
       <div className="w-full mb-4">
         <div className="flex items-center">
           <div className="bg-white/10 backdrop-blur-sm p-3 rounded-l-lg border border-white/20 border-r-0">
-            <i className="fa fa-envelope text-blue-300 w-4"></i>
+            <i className="fa fa-envelope text-blue-300 w-4" aria-hidden="true"></i>
           </div>
           <input
             type="email"
             name="email"
             placeholder="Email"
+            aria-label="Email Address"
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
@@ -175,13 +203,14 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
       <div className="w-full mb-6">
         <div className="flex items-center">
           <div className="bg-white/10 backdrop-blur-sm p-3 rounded-l-lg border border-white/20 border-r-0">
-            <i className="fa fa-lock text-blue-300 w-4"></i>
+            <i className="fa fa-lock text-blue-300 w-4" aria-hidden="true"></i>
           </div>
           <div className="flex-1 relative">
             <input
               type={showPassword ? "text" : "password"}
               name="password"
               placeholder="Password"
+              aria-label="Password"
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
@@ -197,9 +226,10 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-blue-300 hover:text-white transition-colors focus:outline-none"
             >
-              <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+              <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`} aria-hidden="true"></i>
             </button>
           </div>
         </div>
@@ -219,6 +249,17 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
       >
         {isLoading ? 'Signing In...' : 'Sign In'}
       </button>
+
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={handleTestLogin}
+          disabled={isLoading}
+          className="w-full py-3 px-6 rounded-xl font-bold uppercase tracking-wider transition-all duration-200 transform shadow-lg bg-green-600/80 text-white hover:bg-green-700/80 hover:scale-105 active:scale-95 border border-green-400/30"
+        >
+          Test Login (No Password)
+        </button>
+      </div>
 
       <div className="text-center mt-4">
         <button

@@ -1,0 +1,20 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\PMLS\\Documents\\projects\\XcelTrack---Cell-Level-Version-Control-for-Excel\\server\\logs\\.4f2f60df0906c689f52e31fea153b714aed405f7-audit.json",
+    "files": [
+        {
+            "date": 1770903415974,
+            "name": "C:\\Users\\PMLS\\Documents\\projects\\XcelTrack---Cell-Level-Version-Control-for-Excel\\server\\logs\\combined-2026-02-12.log",
+            "hash": "e75cc1dd991eb31c0aa9cd69556d7622f29d1e625ffb7bb1ac521c89741f0f93"
+        },
+        {
+            "date": 1770974112616,
+            "name": "C:\\Users\\PMLS\\Documents\\projects\\XcelTrack---Cell-Level-Version-Control-for-Excel\\server\\logs\\combined-2026-02-13.log",
+            "hash": "c3c5a7cfca0d294836369eac25bcbf335bdf5ff4e5050f4205b6054b722e8242"
+        }
+    ],
+    "hashType": "sha256"
+}

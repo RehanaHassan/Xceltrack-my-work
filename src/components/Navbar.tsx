@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiSun, FiMoon, FiBell } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface NavbarProps {
   toggleSidebar: () => void;
@@ -12,13 +13,7 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, isSidebarOpen }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [isDark, setIsDark] = useState(false);
-
-  const toggleTheme = () => {
-    const nextTheme = !isDark;
-    setIsDark(nextTheme);
-    document.documentElement.setAttribute('data-theme', nextTheme ? 'dark' : 'light');
-  };
+  const { toggleTheme, isDark } = useTheme();
 
   const getInitials = (name: string) => {
     return name
@@ -39,7 +34,7 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, isSidebarOpen }) => {
   };
 
   return (
-    <nav className="bg-white/30 backdrop-blur-xl shadow-lg border-b border-white/40 px-6 py-4 sticky top-0 z-40">
+    <nav className="bg-[var(--bg-navbar)] backdrop-blur-xl shadow-lg border-b border-[var(--border-color)] px-6 py-4 sticky top-0 z-40">
       <div className="flex items-center justify-between">
         {/* Hamburger Menu Button */}
         <button
@@ -63,12 +58,16 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, isSidebarOpen }) => {
             onClick={toggleTheme}
             className="p-2 text-[#535F80] hover:text-blue-600 hover:bg-blue-50 transition-all rounded-lg"
             title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
+            aria-label={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
           >
             {isDark ? <FiSun size={20} /> : <FiMoon size={20} />}
           </button>
 
           {/* Notifications - Bell Icon */}
-          <button className="relative p-2 text-[#535F80] hover:text-sapphire-600 transition-colors">
+          <button
+            className="relative p-2 text-[#535F80] hover:text-sapphire-600 transition-colors"
+            aria-label="Notifications"
+          >
             <FiBell size={20} />
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
           </button>
@@ -78,6 +77,9 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, isSidebarOpen }) => {
             <button
               onClick={() => setIsProfileOpen(!isProfileOpen)}
               className="flex items-center space-x-3 p-2 rounded-lg hover:bg-sapphire-50 transition-all hover:shadow-[0_10px_30px_rgba(37,99,235,0.4)]"
+              aria-label="User Profile Menu"
+              aria-expanded={isProfileOpen}
+              aria-haspopup="true"
             >
               <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white shadow-md overflow-hidden">
                 {user?.photoURL ? (

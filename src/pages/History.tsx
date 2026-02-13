@@ -69,8 +69,8 @@ const History: React.FC = () => {
             {React.createElement(FiActivity as any, { className: "text-white text-2xl" })}
           </div>
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Global History</h1>
-            <p className="text-gray-500 font-medium tracking-wide">Track your activity across all Excel files</p>
+            <h1 className="text-3xl font-extrabold text-[var(--text-primary)] tracking-tight">Global History</h1>
+            <p className="text-[var(--text-secondary)] font-medium tracking-wide">Track your activity across all Excel files</p>
           </div>
         </div>
       </header>

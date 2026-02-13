@@ -285,14 +285,15 @@ const ExcelEditor = React.forwardRef<ExcelEditorRef, ExcelEditorProps>(({
     };
 
     return (
-        <div className="excel-editor-container">
+        <div className="excel-editor-container h-full flex flex-col">
             {/* Univer container */}
             <div
                 ref={containerRef}
-                className="univer-container"
+                className="univer-container flex-1"
                 style={{
                     width: '100%',
-                    height: '600px',
+                    height: '100%',
+                    minHeight: '400px',
                     border: '1px solid #e5e7eb',
                     borderRadius: '8px',
                     overflow: 'hidden',

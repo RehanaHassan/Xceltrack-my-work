@@ -33,7 +33,8 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [accountCreated, setAccountCreated] = useState(false);
 
-  const { signup, loginWithGoogle, loginWithGithub } = useAuth();
+  const { signup, login, loginWithGoogle, loginWithGithub } = useAuth();
+
   const navigate = useNavigate();
 
   const validateField = (name: string, value: string) => {
@@ -166,6 +167,29 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
     }
   };
 
+  const handleTestLogin = async () => {
+    setError('');
+    setIsLoading(true);
+    const testEmail = 'test@xceltrack.com';
+    const testPassword = 'password123';
+
+    try {
+      // Try to login first
+      await login(testEmail, testPassword);
+      navigate('/dashboard');
+    } catch (err) {
+      // If login fails, try to signup
+      try {
+        await signup('Test User', testEmail, testPassword);
+        navigate('/dashboard');
+      } catch (signupErr) {
+        setError('Failed to create test account. Please try manually.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleVerifyOTP = async (otp: string): Promise<boolean> => {
     try {
       // Verify OTP with backend
@@ -262,6 +286,7 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
         <div className="flex justify-center space-x-3 mb-6">
           <button
             type="button"
+            aria-label="Sign up with Google"
             onClick={async () => {
               try {
                 await loginWithGoogle();
@@ -272,10 +297,11 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
             }}
             className="w-10 h-10 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/20 transition-all duration-200 border border-white/20"
           >
-            <i className="fab fa-google text-blue-300"></i>
+            <i className="fab fa-google text-blue-300" aria-hidden="true"></i>
           </button>
           <button
             type="button"
+            aria-label="Sign up with GitHub"
             onClick={async () => {
               try {
                 await loginWithGithub();
@@ -286,7 +312,7 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
             }}
             className="w-10 h-10 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/20 transition-all duration-200 border border-white/20"
           >
-            <i className="fab fa-github text-blue-300"></i>
+            <i className="fab fa-github text-blue-300" aria-hidden="true"></i>
           </button>
         </div>
 
@@ -296,12 +322,13 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
         <div className="w-full mb-4">
           <div className="flex items-center">
             <div className="bg-white/10 backdrop-blur-sm p-3 rounded-l-lg border border-white/20 border-r-0">
-              <i className="fa fa-user text-blue-300 w-4"></i>
+              <i className="fa fa-user text-blue-300 w-4" aria-hidden="true"></i>
             </div>
             <input
               type="text"
               name="name"
               placeholder="Full Name"
+              aria-label="Full Name"
               value={formData.name}
               onChange={handleChange}
               onBlur={handleBlur}
@@ -320,12 +347,13 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
         <div className="w-full mb-4">
           <div className="flex items-center">
             <div className="bg-white/10 backdrop-blur-sm p-3 rounded-l-lg border border-white/20 border-r-0">
-              <i className="fa fa-envelope text-blue-300 w-4"></i>
+              <i className="fa fa-envelope text-blue-300 w-4" aria-hidden="true"></i>
             </div>
             <input
               type="email"
               name="email"
               placeholder="Email"
+              aria-label="Email Address"
               value={formData.email}
               onChange={handleChange}
               onBlur={handleBlur}
@@ -344,12 +372,13 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
         <div className="w-full mb-4">
           <div className="flex items-center">
             <div className="bg-white/10 backdrop-blur-sm p-3 rounded-l-lg border border-white/20 border-r-0">
-              <i className="fa fa-lock text-blue-300 w-4"></i>
+              <i className="fa fa-lock text-blue-300 w-4" aria-hidden="true"></i>
             </div>
             <input
               type={showPassword ? 'text' : 'password'}
               name="password"
               placeholder="Password"
+              aria-label="Password"
               value={formData.password}
               onChange={handleChange}
               onBlur={handleBlur}
@@ -361,9 +390,10 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
               className={`bg-white/10 backdrop-blur-sm p-3 rounded-r-lg border-y border-r ${touched.password && errors.password ? 'border-red-400' : 'border-white/20'} border-l-0 hover:bg-white/20 transition-colors`}
             >
-              <i className={`fa ${showPassword ? 'fa-eye-slash' : 'fa-eye'} text-blue-300 w-4`}></i>
+              <i className={`fa ${showPassword ? 'fa-eye-slash' : 'fa-eye'} text-blue-300 w-4`} aria-hidden="true"></i>
             </button>
           </div>
           {touched.password && errors.password && (
@@ -375,12 +405,13 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
         <div className="w-full mb-6">
           <div className="flex items-center">
             <div className="bg-white/10 backdrop-blur-sm p-3 rounded-l-lg border border-white/20 border-r-0">
-              <i className="fa fa-lock text-blue-300 w-4"></i>
+              <i className="fa fa-lock text-blue-300 w-4" aria-hidden="true"></i>
             </div>
             <input
               type={showConfirmPassword ? 'text' : 'password'}
               name="confirmPassword"
               placeholder="Confirm Password"
+              aria-label="Confirm Password"
               value={formData.confirmPassword}
               onChange={handleChange}
               onBlur={handleBlur}
@@ -392,9 +423,10 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
             <button
               type="button"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
               className={`bg-white/10 backdrop-blur-sm p-3 rounded-r-lg border-y border-r ${touched.confirmPassword && errors.confirmPassword ? 'border-red-400' : 'border-white/20'} border-l-0 hover:bg-white/20 transition-colors`}
             >
-              <i className={`fa ${showConfirmPassword ? 'fa-eye-slash' : 'fa-eye'} text-blue-300 w-4`}></i>
+              <i className={`fa ${showConfirmPassword ? 'fa-eye-slash' : 'fa-eye'} text-blue-300 w-4`} aria-hidden="true"></i>
             </button>
           </div>
           {touched.confirmPassword && errors.confirmPassword && (
@@ -413,6 +445,17 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
         >
           {isLoading ? 'Sending verification code...' : 'Sign Up'}
         </button>
+
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={handleTestLogin}
+            disabled={isLoading}
+            className="w-full py-3 rounded-lg font-semibold transition-all duration-200 shadow-lg bg-green-600/80 text-white hover:bg-green-700/80 hover:shadow-xl border border-green-400/30"
+          >
+            Test Login (No Password)
+          </button>
+        </div>
 
         <p className="text-sm text-blue-200 mt-6 text-center">
           Already have an account?{' '}

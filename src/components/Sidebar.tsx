@@ -66,7 +66,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
   };
 
   return (
-    <div className={`w-64 bg-[#0D2440] border-r border-white/10 text-white h-screen fixed left-0 top-0 shadow-2xl z-40 transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+    <div className={`w-64 bg-[var(--bg-sidebar)] border-r border-white/10 text-[var(--text-on-dark)] h-screen fixed left-0 top-0 shadow-2xl z-40 transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       {/* Logo Section */}
       <div className="p-6 border-b border-white/10">
         <Link to="/dashboard" className="flex items-center space-x-3">

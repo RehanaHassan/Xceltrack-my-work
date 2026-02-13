@@ -48,6 +48,7 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
                     : 'text-gray-600 hover:bg-gray-100'
                     }`}
                 title="Zoom Out"
+                aria-label="Zoom Out"
             >
                 {(FiMinus as any)({ size: 16 })}
             </button>
@@ -61,8 +62,9 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
                     min="50"
                     max="200"
                     className="w-12 text-center text-sm font-medium text-gray-700 bg-transparent focus:outline-none"
+                    aria-label="Zoom Percentage"
                 />
-                <span className="text-sm text-gray-500">%</span>
+                <span className="text-sm text-gray-500" aria-hidden="true">%</span>
             </div>
 
             {/* Zoom In */}
@@ -74,18 +76,20 @@ const ZoomControls: React.FC<ZoomControlsProps> = ({
                     : 'text-gray-600 hover:bg-gray-100'
                     }`}
                 title="Zoom In"
+                aria-label="Zoom In"
             >
                 {(FiPlus as any)({ size: 16 })}
             </button>
 
             {/* Divider */}
-            <div className="h-4 w-px bg-gray-300"></div>
+            <div className="h-4 w-px bg-gray-300" aria-hidden="true"></div>
 
             {/* Fit to Screen */}
             <button
                 onClick={handleFitToScreen}
                 className="p-1 text-gray-600 hover:bg-gray-100 rounded transition-colors"
                 title="Fit to Screen"
+                aria-label="Fit to Screen"
             >
                 {(FiMaximize2 as any)({ size: 16 })}
             </button>

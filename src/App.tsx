@@ -4,6 +4,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { WebSocketProvider } from './contexts/WebSocketContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import Landing from './pages/Landing';
 import AuthForm from './components/AuthForm';
 import Dashboard from './pages/Dashboard';
@@ -118,19 +120,23 @@ function AppRoutes() {
 
 function App() {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <WebSocketProvider>
-          <Router>
-            <div className="App">
-              <ErrorBoundary>
-                <AppRoutes />
-              </ErrorBoundary>
-            </div>
-          </Router>
-        </WebSocketProvider>
-      </ToastProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <SettingsProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <WebSocketProvider>
+              <Router>
+                <div className="App">
+                  <ErrorBoundary>
+                    <AppRoutes />
+                  </ErrorBoundary>
+                </div>
+              </Router>
+            </WebSocketProvider>
+          </ToastProvider>
+        </AuthProvider>
+      </SettingsProvider>
+    </ThemeProvider>
   );
 }
 

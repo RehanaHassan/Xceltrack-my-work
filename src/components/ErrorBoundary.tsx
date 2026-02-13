@@ -1,9 +1,10 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { FiAlertTriangle } from 'react-icons/fi';
+import { FiAlertTriangle, FiRefreshCw, FiHome } from 'react-icons/fi';
 
 interface Props {
     children: ReactNode;
     fallback?: ReactNode;
+    onReset?: () => void;
 }
 
 interface State {
@@ -36,9 +37,11 @@ class ErrorBoundary extends Component<Props, State> {
             error,
             errorInfo,
         });
+        // Here you would typically log to an error reporting service
     }
 
     handleReset = () => {
+        this.props.onReset?.();
         this.setState({
             hasError: false,
             error: null,
@@ -53,43 +56,52 @@ class ErrorBoundary extends Component<Props, State> {
             }
 
             return (
-                <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-                    <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="min-h-[50vh] flex items-center justify-center bg-gray-50 p-6">
+                    <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center border border-gray-100">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
                             {(FiAlertTriangle as any)({ className: "text-red-600", size: 32 })}
                         </div>
-                        <h1 className="text-2xl font-bold text-gray-800 mb-2">
-                            Oops! Something went wrong
-                        </h1>
-                        <p className="text-gray-600 mb-6">
-                            We encountered an unexpected error. Please try refreshing the page or contact support if the problem persists.
+                        <h2 className="text-2xl font-bold text-gray-800 mb-3">
+                            Something went wrong
+                        </h2>
+                        <p className="text-gray-600 mb-8">
+                            We encountered an unexpected error. Please try refreshing the page.
                         </p>
 
                         {process.env.NODE_ENV === 'development' && this.state.error && (
-                            <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
-                                <p className="text-xs font-mono text-red-600 mb-2">
+                            <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left border border-gray-200 overflow-hidden">
+                                <p className="text-xs font-mono text-red-600 mb-2 font-semibold break-all">
                                     {this.state.error.toString()}
                                 </p>
                                 {this.state.errorInfo && (
-                                    <pre className="text-xs text-gray-600 overflow-auto max-h-40">
+                                    <pre className="text-xs text-gray-500 overflow-auto max-h-40 custom-scrollbar">
                                         {this.state.errorInfo.componentStack}
                                     </pre>
                                 )}
                             </div>
                         )}
 
-                        <div className="flex items-center justify-center space-x-3">
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                             <button
                                 onClick={this.handleReset}
-                                className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                                className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2 font-medium"
                             >
-                                Try Again
+                                {(FiRefreshCw as any)({ size: 16 })}
+                                <span>Try Again</span>
                             </button>
                             <button
                                 onClick={() => window.location.reload()}
-                                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                                className="w-full sm:w-auto px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2 font-medium"
                             >
-                                Refresh Page
+                                {(FiRefreshCw as any)({ size: 16 })}
+                                <span>Reload Page</span>
+                            </button>
+                            <button
+                                onClick={() => window.location.href = '/dashboard'}
+                                className="w-full sm:w-auto px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2 font-medium"
+                            >
+                                {(FiHome as any)({ size: 16 })}
+                                <span>Go Home</span>
                             </button>
                         </div>
                     </div>

@@ -11,7 +11,8 @@ export const uploadWorkbook = async (file: File, ownerId: string) => {
     });
 
     if (!response.ok) {
-        throw new Error('Failed to upload workbook');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to upload workbook');
     }
 
     return response.json();
@@ -20,7 +21,8 @@ export const uploadWorkbook = async (file: File, ownerId: string) => {
 export const getWorkbooks = async (ownerId: string) => {
     const response = await fetch(`${API_URL}/workbooks?owner_id=${ownerId}`);
     if (!response.ok) {
-        throw new Error('Failed to fetch workbooks');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch workbooks');
     }
     return response.json();
 };
@@ -28,9 +30,26 @@ export const getWorkbooks = async (ownerId: string) => {
 export const getWorkbookData = async (workbookId: string) => {
     const response = await fetch(`${API_URL}/workbooks/${workbookId}`);
     if (!response.ok) {
-        throw new Error('Failed to fetch workbook data');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch workbook data');
     }
     return response.json();
+};
+
+export const downloadWorkbook = async (workbookId: string, fileName: string) => {
+    const response = await fetch(`${API_URL}/workbooks/${workbookId}/download`);
+    if (!response.ok) {
+        throw new Error('Failed to download workbook');
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
 };
 
 // ============================================
@@ -117,6 +136,16 @@ export const getCommitDetails = async (commit_id: number): Promise<CommitDetails
     return response.json();
 };
 
+// Get a full snapshot of the workbook at a specific commit
+export const getCommitSnapshot = async (commit_id: number) => {
+    const response = await fetch(`${API_URL}/commits/${commit_id}/snapshot`);
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to fetch commit snapshot');
+    }
+    return response.json();
+};
+
 // Rollback workbook to a specific commit
 export const rollbackToCommit = async (workbook_id: number, commit_id: number, user_id: string) => {
     const response = await fetch(`${API_URL}/workbooks/${workbook_id}/rollback`, {
@@ -130,5 +159,47 @@ export const rollbackToCommit = async (workbook_id: number, commit_id: number, u
         throw new Error(error.error || 'Failed to rollback');
     }
 
+    return response.json();
+};
+
+// ============================================
+// WORKSHEET MANAGEMENT API
+// ============================================
+
+export const createWorksheet = async (workbookId: string, name: string, order: number) => {
+    const response = await fetch(`${API_URL}/workbooks/${workbookId}/sheets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, order }),
+    });
+    if (!response.ok) throw new Error('Failed to create worksheet');
+    return response.json();
+};
+
+export const renameWorksheet = async (workbookId: string, sheetId: string, name: string) => {
+    const response = await fetch(`${API_URL}/workbooks/${workbookId}/sheets/${sheetId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+    });
+    if (!response.ok) throw new Error('Failed to rename worksheet');
+    return response.json();
+};
+
+export const deleteWorksheet = async (workbookId: string, sheetId: string) => {
+    const response = await fetch(`${API_URL}/workbooks/${workbookId}/sheets/${sheetId}`, {
+        method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete worksheet');
+    return response.json();
+};
+
+export const reorderWorksheets = async (workbookId: string, orders: { id: string; order: number }[]) => {
+    const response = await fetch(`${API_URL}/workbooks/${workbookId}/sheets/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orders }),
+    });
+    if (!response.ok) throw new Error('Failed to reorder worksheets');
     return response.json();
 };

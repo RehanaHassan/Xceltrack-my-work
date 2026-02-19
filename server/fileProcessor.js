@@ -182,6 +182,13 @@ class FileProcessor extends EventEmitter {
                     'INSERT INTO cell_versions (commit_id, cell_id, value, formula, style) VALUES ($1, $2, $3, $4, $5)',
                     [commitId, cellId, cell.value, cell.formula, JSON.stringify(cell.style)]
                 );
+
+                // Populate commit_changes for the initial commit (all 'added')
+                await client.query(
+                    `INSERT INTO commit_changes (commit_id, cell_id, change_type, new_value, new_formula)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [commitId, cellId, 'added', cell.value, cell.formula]
+                );
             }
 
             processed += batch.length;
@@ -214,11 +221,11 @@ class FileProcessor extends EventEmitter {
 
         const allowedMimeTypes = [
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/vnd.ms-excel',
+            // 'application/vnd.ms-excel', // Legacy .xls not supported by ExcelJS for loading
         ];
 
         if (file && !allowedMimeTypes.includes(file.mimetype)) {
-            errors.push('Invalid file type. Only Excel files (.xlsx, .xls) are allowed');
+            errors.push('Invalid file type. Only Modern Excel files (.xlsx) are supported at this time.');
         }
 
         return {

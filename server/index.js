@@ -22,6 +22,7 @@ const {
     commitLimiter,
 } = require('./rateLimiter');
 const FileProcessor = require('./fileProcessor');
+const DiffEngine = require('./diffEngine');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -154,6 +155,26 @@ const createTables = async () => {
         `);
         console.log('Worksheets table ready');
 
+        // Conflicts Table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS conflicts (
+                id SERIAL PRIMARY KEY,
+                workbook_id INT REFERENCES workbooks(id) ON DELETE CASCADE,
+                worksheet_id INT REFERENCES worksheets(id) ON DELETE CASCADE,
+                row_idx INT NOT NULL,
+                col_idx INT NOT NULL,
+                user1_id VARCHAR(255) NOT NULL,
+                user1_value TEXT,
+                user2_id VARCHAR(255) NOT NULL,
+                user2_value TEXT,
+                status VARCHAR(20) DEFAULT 'pending', -- pending, resolved
+                resolved_by VARCHAR(255),
+                resolved_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        console.log('Conflicts table ready');
+
         // Cells Table (Latest State)
         await pool.query(`
             CREATE TABLE IF NOT EXISTS cells (
@@ -196,6 +217,21 @@ const createTables = async () => {
         `);
         console.log('Cell Versions table ready');
 
+        // Commit Changes Table (Optimized Diffs)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS commit_changes (
+                id SERIAL PRIMARY KEY,
+                commit_id INT REFERENCES commits(id) ON DELETE CASCADE,
+                cell_id INT REFERENCES cells(id) ON DELETE CASCADE,
+                change_type VARCHAR(20), -- added, modified, deleted
+                old_value TEXT,
+                new_value TEXT,
+                old_formula TEXT,
+                new_formula TEXT
+            )
+        `);
+        console.log('Commit changes table ready');
+
         // Create indexes for optimized query performance
         await pool.query(`
             CREATE INDEX IF NOT EXISTS idx_workbooks_owner_id ON workbooks(owner_id);
@@ -219,6 +255,8 @@ const createTables = async () => {
 };
 
 createTables();
+
+const diffEngine = new DiffEngine(pool);
 
 // --- OTP Endpoints ---
 
@@ -529,11 +567,16 @@ app.post('/api/workbooks/upload', uploadLimiter, upload.single('file'), async (r
         });
 
     } catch (error) {
-        await client.query('ROLLBACK');
-        logger.error('Error processing upload', { error: error.message, owner_id, fileName: file.originalname });
-        res.status(500).json({ error: error.message });
+        if (client) await client.query('ROLLBACK');
+        logger.error('Error processing upload', {
+            error: error.message,
+            stack: error.stack,
+            owner_id,
+            fileName: file ? file.originalname : 'unknown'
+        });
+        res.status(500).json({ error: error.message || 'Internal server error during upload' });
     } finally {
-        client.release();
+        if (client) client.release();
     }
 });
 
@@ -624,6 +667,79 @@ app.get('/api/workbooks/:id', async (req, res) => {
     } catch (error) {
         console.error('Error fetching workbook details:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Create Worksheet
+app.post('/api/workbooks/:id/sheets', async (req, res) => {
+    const { id } = req.params;
+    const { name, order } = req.body;
+
+    try {
+        const result = await pool.query(
+            'INSERT INTO worksheets (workbook_id, name, sheet_order) VALUES ($1, $2, $3) RETURNING *',
+            [id, name, order || 0]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        logger.error('Error creating worksheet', { error: error.message, workbookId: id });
+        res.status(500).json({ error: 'Failed to create worksheet' });
+    }
+});
+
+// Rename Worksheet
+app.put('/api/workbooks/:id/sheets/:sheetId', async (req, res) => {
+    const { sheetId } = req.params;
+    const { name } = req.body;
+
+    try {
+        const result = await pool.query(
+            'UPDATE worksheets SET name = $1 WHERE id = $2 RETURNING *',
+            [name, sheetId]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Worksheet not found' });
+        res.json(result.rows[0]);
+    } catch (error) {
+        logger.error('Error renaming worksheet', { error: error.message, sheetId });
+        res.status(500).json({ error: 'Failed to rename worksheet' });
+    }
+});
+
+// Delete Worksheet
+app.delete('/api/workbooks/:id/sheets/:sheetId', async (req, res) => {
+    const { sheetId } = req.params;
+
+    try {
+        await pool.query('DELETE FROM worksheets WHERE id = $1', [sheetId]);
+        res.json({ message: 'Worksheet deleted successfully' });
+    } catch (error) {
+        logger.error('Error deleting worksheet', { error: error.message, sheetId });
+        res.status(500).json({ error: 'Failed to delete worksheet' });
+    }
+});
+
+// Reorder Worksheets
+app.put('/api/workbooks/:id/sheets/reorder', async (req, res) => {
+    const { id } = req.params;
+    const { orders } = req.body; // Array of { id: number, order: number }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        for (const item of orders) {
+            await client.query(
+                'UPDATE worksheets SET sheet_order = $1 WHERE id = $2 AND workbook_id = $3',
+                [item.order, item.id, id]
+            );
+        }
+        await client.query('COMMIT');
+        res.json({ message: 'Worksheets reordered successfully' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        logger.error('Error reordering worksheets', { error: error.message, workbookId: id });
+        res.status(500).json({ error: 'Failed to reorder worksheets' });
+    } finally {
+        client.release();
     }
 });
 
@@ -764,7 +880,15 @@ app.post('/api/commits', commitLimiter, async (req, res) => {
         );
         const commit = commitResult.rows[0];
 
-        // Snapshot all current cells for this workbook
+        // Optimized Commit: Only save changes since last commit
+        // 1. Get last commit ID
+        const lastCommitResult = await client.query(
+            'SELECT id FROM commits WHERE workbook_id = $1 AND id < $2 ORDER BY id DESC LIMIT 1',
+            [workbook_id, commit.id]
+        );
+        const lastCommitId = lastCommitResult.rows.length > 0 ? lastCommitResult.rows[0].id : null;
+
+        // Snapshot all current cells
         const cellsResult = await client.query(
             `SELECT c.* FROM cells c
              JOIN worksheets w ON c.worksheet_id = w.id
@@ -772,13 +896,45 @@ app.post('/api/commits', commitLimiter, async (req, res) => {
             [workbook_id]
         );
 
-        // Insert cell versions for this commit
         for (const cell of cellsResult.rows) {
+            // Always save to cell_versions for easy rollback (current implementation choice)
             await client.query(
                 `INSERT INTO cell_versions (commit_id, cell_id, value, formula, style)
                  VALUES ($1, $2, $3, $4, $5)`,
                 [commit.id, cell.id, cell.value, cell.formula, cell.style]
             );
+
+            // Populate commit_changes for diffing optimization
+            if (lastCommitId) {
+                const prevVersion = await client.query(
+                    'SELECT value, formula FROM cell_versions WHERE commit_id = $1 AND cell_id = $2',
+                    [lastCommitId, cell.id]
+                );
+
+                if (prevVersion.rows.length > 0) {
+                    const prev = prevVersion.rows[0];
+                    if (prev.value !== cell.value || prev.formula !== cell.formula) {
+                        await client.query(
+                            `INSERT INTO commit_changes (commit_id, cell_id, change_type, old_value, new_value, old_formula, new_formula)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                            [commit.id, cell.id, 'modified', prev.value, cell.value, prev.formula, cell.formula]
+                        );
+                    }
+                } else {
+                    await client.query(
+                        `INSERT INTO commit_changes (commit_id, cell_id, change_type, new_value, new_formula)
+                         VALUES ($1, $2, $3, $4, $5)`,
+                        [commit.id, cell.id, 'added', cell.value, cell.formula]
+                    );
+                }
+            } else {
+                // First commit
+                await client.query(
+                    `INSERT INTO commit_changes (commit_id, cell_id, change_type, new_value, new_formula)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [commit.id, cell.id, 'added', cell.value, cell.formula]
+                );
+            }
         }
 
         await client.query('COMMIT');
@@ -884,18 +1040,18 @@ app.get('/api/commits/:id', async (req, res) => {
 
         const commit = commitResult.rows[0];
 
-        // Get all cell versions for this commit with cell metadata
+        // Get cell changes for this commit from the optimized commit_changes table
         const changesResult = await pool.query(
             `SELECT 
-                cv.*,
+                cc.*,
                 c.address,
                 c.row_idx,
                 c.col_idx,
                 w.name as worksheet_name
-             FROM cell_versions cv
-             JOIN cells c ON cv.cell_id = c.id
+             FROM commit_changes cc
+             JOIN cells c ON cc.cell_id = c.id
              JOIN worksheets w ON c.worksheet_id = w.id
-             WHERE cv.commit_id = $1
+             WHERE cc.commit_id = $1
              ORDER BY w.sheet_order, c.row_idx, c.col_idx`,
             [id]
         );
@@ -908,6 +1064,88 @@ app.get('/api/commits/:id', async (req, res) => {
     } catch (error) {
         console.error('Error fetching commit details:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// Compare two commits (Diff API)
+app.get('/api/workbooks/:id/diff', generalLimiter, async (req, res) => {
+    const { id } = req.params;
+    const { base, head } = req.query;
+
+    if (!head) {
+        return res.status(400).json({ error: 'head commit_id is required' });
+    }
+
+    try {
+        const diffs = await diffEngine.compareCommits(id, base, head);
+        res.json({
+            workbook_id: id,
+            base_commit: base || 'initial',
+            head_commit: head,
+            diffs
+        });
+    } catch (error) {
+        logger.error('Error generating diff', { error: error.message, workbookId: id, base, head });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Download Workbook as Excel
+app.get('/api/workbooks/:id/download', generalLimiter, async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        // Fetch Workbook Info
+        const wbResult = await pool.query('SELECT * FROM workbooks WHERE id = $1', [id]);
+        if (wbResult.rows.length === 0) return res.status(404).json({ error: 'Workbook not found' });
+        const workbook = wbResult.rows[0];
+
+        // Fetch Worksheets
+        const worksheets = await pool.query('SELECT * FROM worksheets WHERE workbook_id = $1 ORDER BY sheet_order', [id]);
+
+        const excelWorkbook = new ExcelJS.Workbook();
+        excelWorkbook.creator = 'XcelTrack';
+        excelWorkbook.lastModifiedBy = 'XcelTrack';
+        excelWorkbook.created = workbook.created_at;
+        excelWorkbook.modified = workbook.updated_at;
+
+        for (const sheet of worksheets.rows) {
+            const excelSheet = excelWorkbook.addWorksheet(sheet.name);
+
+            // Fetch cells for this sheet
+            const cells = await pool.query('SELECT * FROM cells WHERE worksheet_id = $1', [sheet.id]);
+
+            cells.rows.forEach(cell => {
+                const excelCell = excelSheet.getCell(cell.row_idx + 1, cell.col_idx + 1);
+                if (cell.formula) {
+                    excelCell.value = { formula: cell.formula, result: cell.value };
+                } else {
+                    excelCell.value = cell.value;
+                }
+
+                if (cell.style) {
+                    // Basic style application if needed
+                }
+            });
+        }
+
+        // Set response headers for download
+        res.setHeader(
+            'Content-Type',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="${workbook.name}"`
+        );
+
+        await excelWorkbook.xlsx.write(res);
+        res.end();
+
+        logger.info('Workbook downloaded', { workbookId: id, name: workbook.name });
+    } catch (error) {
+        logger.error('Error exporting workbook', { error: error.message, workbookId: id });
+        res.status(500).json({ error: 'Failed to generate Excel file' });
     }
 });
 
@@ -987,6 +1225,74 @@ app.post('/api/workbooks/:id/rollback', async (req, res) => {
         res.status(500).json({ error: error.message });
     } finally {
         client.release();
+    }
+});
+
+// Get Snapshot of Workbook at specific commit (for preview)
+app.get('/api/commits/:id/snapshot', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        // 1. Get commit info to find workbook_id
+        const commitResult = await pool.query('SELECT * FROM commits WHERE id = $1', [id]);
+        if (commitResult.rows.length === 0) return res.status(404).json({ error: 'Commit not found' });
+        const commit = commitResult.rows[0];
+
+        // 2. Fetch Workbook basic info
+        const wbResult = await pool.query('SELECT * FROM workbooks WHERE id = $1', [commit.workbook_id]);
+        const workbook = wbResult.rows[0];
+
+        // 3. Fetch Worksheets (assuming they haven't changed much, otherwise this needs versioning too)
+        const wsResult = await pool.query('SELECT * FROM worksheets WHERE workbook_id = $1 ORDER BY sheet_order', [workbook.id]);
+        const worksheets = wsResult.rows;
+
+        const sheetsData = {};
+        const sheetOrder = [];
+
+        for (const ws of worksheets) {
+            sheetOrder.push(ws.id.toString());
+
+            // 4. Fetch Cell Versions for this SPECIFIC commit
+            const cellsResult = await pool.query(
+                `SELECT cv.*, c.row_idx, c.col_idx 
+                 FROM cell_versions cv
+                 JOIN cells c ON cv.cell_id = c.id
+                 WHERE cv.commit_id = $1 AND c.worksheet_id = $2`,
+                [id, ws.id]
+            );
+
+            const cellData = {};
+            cellsResult.rows.forEach(cell => {
+                if (!cellData[cell.row_idx]) cellData[cell.row_idx] = {};
+                cellData[cell.row_idx][cell.col_idx] = {
+                    v: cell.value,
+                    // styles mapping could go here
+                };
+            });
+
+            sheetsData[ws.id] = {
+                id: ws.id.toString(),
+                name: ws.name,
+                cellData: cellData,
+                rowCount: 1000,
+                columnCount: 26
+            };
+        }
+
+        const univerData = {
+            id: workbook.id.toString(),
+            name: `${workbook.name} (Preview: ${commit.hash.substring(0, 8)})`,
+            appVersion: '3.0.0',
+            sheets: sheetsData,
+            sheetOrder: sheetOrder,
+            styles: {}
+        };
+
+        res.json(univerData);
+
+    } catch (error) {
+        console.error('Error generating snapshot:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

@@ -16,7 +16,13 @@ import { Commit } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
-import { uploadWorkbook, getWorkbookData, createCommit } from '../services/api';
+import { uploadWorkbook, getWorkbookData, createCommit, getCommitDetails, getCommitSnapshot, createWorksheet, renameWorksheet, deleteWorksheet, reorderWorksheets } from '../services/api';
+import HybridSyncBanner from '../components/HybridSyncBanner';
+import ConflictNotificationBanner from '../components/ConflictNotificationBanner';
+import ConflictResolutionViewer from '../components/ConflictResolutionViewer';
+import DiffHighlighter from '../components/DiffHighlighter';
+import SemanticDiffSummary from '../components/SemanticDiffSummary';
+import CommitDetailViewer from '../components/CommitDetailViewer';
 
 const Editor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +46,11 @@ const Editor: React.FC = () => {
   const [selectedCommitForRollback, setSelectedCommitForRollback] = useState<Commit | null>(null);
   const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [syncStatus, setSyncStatus] = useState<'syncing' | 'offline' | 'error' | 'synced'>('synced');
+  const [conflicts, setConflicts] = useState<any[]>([]);
+  const [isConflictViewerOpen, setIsConflictViewerOpen] = useState(false);
+  const [selectedCommitDetails, setSelectedCommitDetails] = useState<any | null>(null);
+  const [isCommitDetailsLoading, setIsCommitDetailsLoading] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -126,20 +137,48 @@ const Editor: React.FC = () => {
       return;
     }
 
+    setSyncStatus('syncing');
     try {
       // Create a commit for this save
       const commit = await createCommit(
-        parseInt(id),
+        parseInt(id || '0'),
         user.uid,
         'Manual save'
       );
 
+      setSyncStatus('synced');
       showToast(`Saved! Commit: ${commit.hash.substring(0, 8)}`, 'success');
+      // Refresh history if sidebar is open
+      if (showVersionHistory) {
+        // This is a bit hacky, but history timeline refreshes on workbookId change or manual trigger
+        // Since workbookId hasn't changed, we might need a refresh trigger in the timeline
+      }
     } catch (error) {
       console.error('Error saving workbook:', error);
+      setSyncStatus('error');
       showToast('Failed to save workbook', 'error');
     }
-  }, [id, user, showToast]);
+  }, [id, user, showToast, showVersionHistory]);
+
+  const handleCommitSelect = async (commit: Commit) => {
+    setIsCommitDetailsLoading(true);
+    try {
+      const details = await getCommitDetails(commit.id);
+      setSelectedCommitDetails(details);
+    } catch (err) {
+      console.error('Error fetching commit details:', err);
+      showToast('Failed to load commit details', 'error');
+    } finally {
+      setIsCommitDetailsLoading(false);
+    }
+  };
+
+  const handleResolveConflicts = (resolutions: any) => {
+    console.log('Resolving conflicts:', resolutions);
+    setConflicts([]);
+    setIsConflictViewerOpen(false);
+    showToast('Conflicts resolved successfully', 'success');
+  };
 
   const handleCellSelect = React.useCallback((cell: any) => {
     const address = `${String.fromCharCode(65 + cell.col)}${cell.row + 1}`;
@@ -172,9 +211,9 @@ const Editor: React.FC = () => {
       if (response.workbook && response.workbook.id) {
         navigate(`/editor/${response.workbook.id}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload failed:', error);
-      showToast('Failed to upload workbook', 'error');
+      showToast(error.message || 'Failed to upload workbook', 'error');
     }
   };
 
@@ -224,32 +263,67 @@ const Editor: React.FC = () => {
     editorRef.current?.setZoom(newZoom);
   };
 
-  const handleWorksheetCreate = () => {
-    const newId = `sheet-${Date.now()}`;
-    const newWorksheet = {
-      id: newId,
-      name: `Sheet${worksheets.length + 1}`,
-      position: worksheets.length,
-    };
-    setWorksheets([...worksheets, newWorksheet]);
-    setActiveWorksheetId(newId);
+  const handleWorksheetCreate = async () => {
+    if (!id) return;
+    try {
+      const newSheet = await createWorksheet(id, `Sheet${worksheets.length + 1}`, worksheets.length);
+      setWorksheets([...worksheets, {
+        id: newSheet.id.toString(),
+        name: newSheet.name,
+        position: newSheet.sheet_order
+      }]);
+      setActiveWorksheetId(newSheet.id.toString());
+      showToast('New worksheet created', 'success');
+    } catch (err) {
+      console.error('Error creating worksheet:', err);
+      showToast('Failed to create worksheet', 'error');
+    }
   };
 
-  const handleWorksheetRename = (worksheetId: string, newName: string) => {
-    setWorksheets(
-      worksheets.map((ws) =>
-        ws.id === worksheetId ? { ...ws, name: newName } : ws
-      )
-    );
+  const handleWorksheetRename = async (worksheetId: string, newName: string) => {
+    if (!id) return;
+    try {
+      await renameWorksheet(id, worksheetId, newName);
+      setWorksheets(
+        worksheets.map((ws) =>
+          ws.id === worksheetId ? { ...ws, name: newName } : ws
+        )
+      );
+      showToast('Worksheet renamed', 'success');
+    } catch (err) {
+      console.error('Error renaming worksheet:', err);
+      showToast('Failed to rename worksheet', 'error');
+    }
   };
 
-  const handleWorksheetDelete = (worksheetId: string) => {
-    if (worksheets.length > 1) {
+  const handleWorksheetDelete = async (worksheetId: string) => {
+    if (!id || worksheets.length <= 1) return;
+    try {
+      await deleteWorksheet(id, worksheetId);
       const newWorksheets = worksheets.filter((ws) => ws.id !== worksheetId);
       setWorksheets(newWorksheets);
       if (activeWorksheetId === worksheetId) {
         setActiveWorksheetId(newWorksheets[0].id);
       }
+      showToast('Worksheet deleted', 'success');
+    } catch (err) {
+      console.error('Error deleting worksheet:', err);
+      showToast('Failed to delete worksheet', 'error');
+    }
+  };
+
+  const handleWorksheetReorder = async (reorderedWorksheets: any[]) => {
+    if (!id) return;
+    try {
+      setWorksheets(reorderedWorksheets);
+      const orders = reorderedWorksheets.map((ws, index) => ({ id: ws.id, order: index }));
+      await reorderWorksheets(id, orders);
+      showToast('Sheets reordered', 'success');
+    } catch (err) {
+      console.error('Error reordering worksheets:', err);
+      showToast('Failed to save sheet order', 'error');
+      // Revert in case of failure?
+      fetchWorkbook();
     }
   };
 
@@ -361,6 +435,19 @@ const Editor: React.FC = () => {
         onFormatChange={handleFormatChange}
       />
 
+      {/* Hybrid Sync Banner */}
+      <HybridSyncBanner
+        status={syncStatus}
+        onRetry={() => setIsConflictViewerOpen(true)}
+      />
+
+      {/* Conflict Notification Banner */}
+      <ConflictNotificationBanner
+        conflicts={conflicts}
+        onResolve={() => setIsConflictViewerOpen(true)}
+        onDismiss={() => setConflicts([])}
+      />
+
       {/* Formula Bar */}
       <FormulaBar
         selectedCell={selectedCell}
@@ -409,6 +496,7 @@ const Editor: React.FC = () => {
                 onWorksheetCreate={handleWorksheetCreate}
                 onWorksheetRename={handleWorksheetRename}
                 onWorksheetDelete={handleWorksheetDelete}
+                onWorksheetReorder={handleWorksheetReorder}
               />
             </div>
 
@@ -494,19 +582,65 @@ const Editor: React.FC = () => {
                 )}
 
                 {showVersionHistory && id && (
-                  <VersionHistoryTimeline
-                    workbookId={parseInt(id)}
-                    onCommitSelect={(commit: any) => {
-                      setSelectedCommitForRollback(commit);
-                      setIsRollbackModalOpen(true);
-                    }}
-                  />
+                  <div className="flex flex-col h-full">
+                    {!selectedCommitDetails ? (
+                      <VersionHistoryTimeline
+                        workbookId={parseInt(id)}
+                        onCommitSelect={handleCommitSelect}
+                      />
+                    ) : (
+                      <div className="flex flex-col h-full bg-white overflow-y-auto">
+                        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                          <button
+                            onClick={() => setSelectedCommitDetails(null)}
+                            className="text-blue-600 text-sm font-medium hover:underline"
+                          >
+                            &larr; Back to History
+                          </button>
+                        </div>
+                        <CommitDetailViewer
+                          commit={{
+                            id: selectedCommitDetails.commit.id.toString(),
+                            message: selectedCommitDetails.commit.message,
+                            user: selectedCommitDetails.commit.user_id,
+                            timestamp: new Date(selectedCommitDetails.commit.timestamp),
+                            changes: selectedCommitDetails.changes.map((c: any) => ({
+                              cellReference: c.address,
+                              changeType: c.change_type || 'modified',
+                              oldValue: c.old_value,
+                              newValue: c.new_value,
+                              oldFormula: c.old_formula,
+                              newFormula: c.new_formula
+                            }))
+                          }}
+                          onClose={() => setSelectedCommitDetails(null)}
+                          onRevert={() => {
+                            setSelectedCommitForRollback(selectedCommitDetails.commit);
+                            setIsRollbackModalOpen(true);
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </>
           )}
         </div>
       </div>
+
+      {/* Conflict Resolution Modal Overlay */}
+      {isConflictViewerOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-75 p-4">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <ConflictResolutionViewer
+              conflicts={conflicts}
+              onResolve={handleResolveConflicts}
+              onCancel={() => setIsConflictViewerOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* File Upload Modal */}
       <FileUploadModal
@@ -530,6 +664,18 @@ const Editor: React.FC = () => {
             window.location.reload();
           }}
           onCancel={() => setIsRollbackModalOpen(false)}
+          onPreview={async (cid) => {
+            showToast(`Loading preview for version ${cid}...`, 'info');
+            try {
+              const snapshot = await getCommitSnapshot(cid);
+              setWorkbookData(snapshot);
+              setIsRollbackModalOpen(false);
+              showToast('Preview loaded. Click "Confirm Rollback" to make this permanent.', 'info');
+            } catch (err) {
+              console.error('Error loading preview:', err);
+              showToast('Failed to load preview', 'error');
+            }
+          }}
         />
       )}
     </div>

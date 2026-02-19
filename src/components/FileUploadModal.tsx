@@ -46,7 +46,7 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
             if (isValidExcelFile(file)) {
                 setSelectedFile(file);
             } else {
-                alert('Please upload a valid Excel file (.xlsx or .xls)');
+                alert('Please upload a valid Modern Excel file (.xlsx). Legacy .xls files are not supported at this time.');
             }
         }
     };
@@ -58,13 +58,13 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
             if (isValidExcelFile(file)) {
                 setSelectedFile(file);
             } else {
-                alert('Please upload a valid Excel file (.xlsx or .xls)');
+                alert('Please upload a valid Modern Excel file (.xlsx). Legacy .xls files are not supported at this time.');
             }
         }
     };
 
     const isValidExcelFile = (file: File): boolean => {
-        const validExtensions = ['.xlsx', '.xls'];
+        const validExtensions = ['.xlsx'];
         const fileName = file.name.toLowerCase();
         return validExtensions.some((ext) => fileName.endsWith(ext));
     };
@@ -139,7 +139,7 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
                             className="hidden"
                         />
                         <p className="text-xs text-gray-400 mt-4">
-                            Supported formats: .xlsx, .xls (Max 10MB)
+                            Supported formats: .xlsx (Modern Excel)
                         </p>
                     </div>
 

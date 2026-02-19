@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getWorkbooks, uploadWorkbook } from '../services/api';
+import { getWorkbooks, uploadWorkbook, downloadWorkbook } from '../services/api';
 import FileUploadModal from '../components/FileUploadModal';
 import SkeletonLoader from '../components/SkeletonLoader';
 
@@ -22,9 +22,9 @@ const Dashboard: React.FC = () => {
       try {
         const data = await getWorkbooks(user.uid);
         setFiles(data);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to fetch workbooks", error);
-        setError("Failed to load workbooks. Please try again.");
+        setError(error.message || "Failed to load workbooks. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -49,11 +49,24 @@ const Dashboard: React.FC = () => {
       if (response.workbook) {
         navigate(`/editor/${response.workbook.id}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Upload failed", error);
-      showToast("Failed to upload workbook", "error");
+      showToast(error.message || "Failed to upload workbook", "error");
     }
     setIsUploadModalOpen(false);
+  };
+
+  const handleDownload = async (e: React.MouseEvent, fileId: string, fileName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      showToast(`Preparing download for ${fileName}...`, 'info');
+      await downloadWorkbook(fileId, fileName);
+      showToast('Download started successfully', 'success');
+    } catch (err) {
+      console.error('Download failed:', err);
+      showToast('Failed to download workbook', 'error');
+    }
   };
 
 
@@ -230,6 +243,15 @@ const Dashboard: React.FC = () => {
                         </div>
                         <div className="flex items-center space-x-4">
                           <span className="text-sm text-[#535F80]">{file.size || 'N/A'}</span>
+                          <button
+                            onClick={(e) => handleDownload(e, file.id, file.name)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Download as Excel"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                          </button>
                           <button className="text-[#535F80] hover:text-[#051747] transition-colors">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />

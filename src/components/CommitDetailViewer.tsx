@@ -1,5 +1,7 @@
 import React from 'react';
-import { FiUser, FiClock, FiMessageSquare, FiGitCommit, FiFileText } from 'react-icons/fi';
+import { FiUser, FiClock, FiMessageSquare, FiGitCommit, FiFileText, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import SemanticDiffSummary from './SemanticDiffSummary';
+import DiffHighlighter from './DiffHighlighter';
 
 interface CellChange {
     cellReference: string;
@@ -104,66 +106,88 @@ const CommitDetailViewer: React.FC<CommitDetailViewerProps> = ({
 
             {/* Changes List */}
             <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase">
-                        Changes ({commit.changes.length})
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                        Commit Analysis
                     </h3>
                 </div>
 
-                <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                    {commit.changes.map((change, index) => (
-                        <div
-                            key={index}
-                            className={`border rounded-lg p-4 ${getChangeTypeColor(change.changeType)}`}
-                        >
-                            <div className="flex items-start justify-between mb-2">
-                                <div className="flex items-center space-x-2">
-                                    {(FiFileText as any)({ size: 16 })}
-                                    <span className="font-mono font-semibold">{change.cellReference}</span>
-                                    <span className="px-2 py-0.5 bg-white bg-opacity-50 rounded text-xs font-medium uppercase">
-                                        {change.changeType}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Value Changes */}
-                            {(change.oldValue !== undefined || change.newValue !== undefined) && (
-                                <div className="mt-2 space-y-1">
-                                    {change.oldValue !== undefined && (
-                                        <div className="flex items-start space-x-2 text-sm">
-                                            <span className="text-gray-600 font-medium min-w-[60px]">Old:</span>
-                                            <span className="font-mono">{change.oldValue || '(empty)'}</span>
-                                        </div>
-                                    )}
-                                    {change.newValue !== undefined && (
-                                        <div className="flex items-start space-x-2 text-sm">
-                                            <span className="text-gray-600 font-medium min-w-[60px]">New:</span>
-                                            <span className="font-mono">{change.newValue || '(empty)'}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Formula Changes */}
-                            {(change.oldFormula !== undefined || change.newFormula !== undefined) && (
-                                <div className="mt-2 space-y-1">
-                                    {change.oldFormula !== undefined && (
-                                        <div className="flex items-start space-x-2 text-sm">
-                                            <span className="text-gray-600 font-medium min-w-[60px]">Old fx:</span>
-                                            <span className="font-mono text-purple-600">{change.oldFormula}</span>
-                                        </div>
-                                    )}
-                                    {change.newFormula !== undefined && (
-                                        <div className="flex items-start space-x-2 text-sm">
-                                            <span className="text-gray-600 font-medium min-w-[60px]">New fx:</span>
-                                            <span className="font-mono text-purple-600">{change.newFormula}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                {/* Semantic Summary Card */}
+                <div className="mb-8">
+                    <SemanticDiffSummary
+                        changes={commit.changes.map(c => ({
+                            type: c.changeType === 'added' ? 'cell_added' : c.changeType === 'deleted' ? 'cell_deleted' : 'value_change',
+                            cellReference: c.cellReference,
+                            description: `${c.changeType === 'modified' ? 'Updated' : c.changeType === 'added' ? 'Added' : 'Cleared'} cell ${c.cellReference} ${c.newValue ? `to "${c.newValue}"` : ''}`,
+                            impact: 'medium'
+                        }))}
+                    />
                 </div>
+
+                <div className="flex items-center justify-between mb-4 border-t border-gray-100 pt-6">
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                        Visual Diff ({commit.changes.length} cells)
+                    </h3>
+                </div>
+
+                {/* Visual Diff Highlighter */}
+                <div className="mb-6">
+                    <DiffHighlighter
+                        diffs={commit.changes.map(c => ({
+                            cellReference: c.cellReference,
+                            changeType: c.changeType,
+                            oldValue: c.oldValue,
+                            newValue: c.newValue,
+                            oldFormula: c.oldFormula,
+                            newFormula: c.newFormula
+                        }))}
+                        viewMode="unified"
+                    />
+                </div>
+
+                <details className="mt-8 group">
+                    <summary className="flex items-center justify-between cursor-pointer text-sm font-semibold text-gray-500 uppercase tracking-wider hover:text-gray-700">
+                        <span>Raw Change List</span>
+                        <FiChevronDown className="group-open:hidden" />
+                        <FiChevronUp className="hidden group-open:block" />
+                    </summary>
+                    <div className="space-y-3 mt-4 max-h-[400px] overflow-y-auto">
+                        {commit.changes.map((change, index) => (
+                            <div
+                                key={index}
+                                className={`border rounded-lg p-4 ${getChangeTypeColor(change.changeType)}`}
+                            >
+                                <div className="flex items-start justify-between mb-2">
+                                    <div className="flex items-center space-x-2">
+                                        {(FiFileText as any)({ size: 16 })}
+                                        <span className="font-mono font-semibold">{change.cellReference}</span>
+                                        <span className="px-2 py-0.5 bg-white bg-opacity-50 rounded text-xs font-medium uppercase">
+                                            {change.changeType}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Value Changes */}
+                                {(change.oldValue !== undefined || change.newValue !== undefined) && (
+                                    <div className="mt-2 space-y-1">
+                                        {change.oldValue !== undefined && (
+                                            <div className="flex items-start space-x-2 text-sm">
+                                                <span className="text-gray-600 font-medium min-w-[60px]">Old:</span>
+                                                <span className="font-mono">{change.oldValue || '(empty)'}</span>
+                                            </div>
+                                        )}
+                                        {change.newValue !== undefined && (
+                                            <div className="flex items-start space-x-2 text-sm">
+                                                <span className="text-gray-600 font-medium min-w-[60px]">New:</span>
+                                                <span className="font-mono">{change.newValue || '(empty)'}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </details>
             </div>
         </div>
     );
